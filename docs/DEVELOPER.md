@@ -152,6 +152,12 @@ Railway settings (set on the service; `railway.json` is ignored): Dockerfile pat
 
 `.github/workflows/ci.yml`: unit tests on Node 22 and 24; then builds the demo image and runs `tests/demo-check.sh` against a PostgreSQL service and the stand-in.
 
+## Dependency updates
+
+Dependabot (`.github/dependabot.yml`) opens weekly pull requests: minor and patch updates grouped into one, GitHub Actions in another, each major update on its own. Merge one when CI is green and it doesn't change what the plugin supports.
+
+Some major versions are ignored on purpose: TypeScript (7.x is the native compiler, which the type-checking and build tools here don't support yet) and `@types/node` (the types must match the oldest Node version the plugin supports, not the newest). Lift an ignore rule when the plugin moves to the new version.
+
 ## Releasing
 
 Releases are published by `.github/workflows/release.yml`; never tag or create a release by hand.

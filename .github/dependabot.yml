@@ -5,6 +5,12 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # Major versions we can't take yet (see docs/DEVELOPER.md):
+    ignore:
+      - dependency-name: "typescript"  # TypeScript 7 is the native compiler; vue-tsc and the build tooling still need 5.x
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"  # types must match the oldest supported Node version, not the newest
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
