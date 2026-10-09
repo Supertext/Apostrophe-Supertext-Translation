@@ -1,0 +1,46 @@
+{
+  "name": "supertext-apostrophe-translation",
+  "version": "0.1.0",
+  "description": "Supertext AI translation for ApostropheCMS: a translation provider for Apostrophe's own Localize workflow.",
+  "main": "index.js",
+  "type": "commonjs",
+  "license": "MIT",
+  "author": "Supertext AG <support@supertext.com> (https://www.supertext.com)",
+  "homepage": "https://github.com/Supertext/Apostrophe-Supertext-Translation",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Supertext/Apostrophe-Supertext-Translation.git"
+  },
+  "keywords": [
+    "apostrophe",
+    "apostrophecms",
+    "translation",
+    "localization",
+    "i18n",
+    "supertext",
+    "machine translation"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "i18n",
+    "ui",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "docs:screenshots": "cd tests/docs && npm install --no-audit --no-fund && node screenshots.mjs",
+    "docs:stand-in": "node tests/docs/stand-in.mjs"
+  },
+  "peerDependencies": {
+    "apostrophe": "^4.13.0"
+  },
+  "dependencies": {
+    "node-html-parser": "^7.0.1"
+  }
+}

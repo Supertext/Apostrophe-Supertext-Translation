@@ -1,0 +1,10 @@
+node_modules
+demo/node_modules
+demo/module
+demo/data
+demo/.env
+demo/public/apos-frontend
+demo/public/uploads
+tests/docs/node_modules
+.git
+demo/apos-build

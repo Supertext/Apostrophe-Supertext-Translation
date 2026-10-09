@@ -1,0 +1,32 @@
+{
+  "name": "supertext-apostrophe-demo",
+  "version": "1.0.0",
+  "description": "Supertext Translation for Apostrophe: demo site (Railway), based on the Apostrophe essentials starter kit.",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "start": "node app",
+    "build": "cross-env NODE_ENV=production node app @apostrophecms/asset:build",
+    "serve": "cross-env NODE_ENV=production node app"
+  },
+  "author": "Supertext AG",
+  "license": "MIT",
+  "dependencies": {
+    "@apostrophecms/vite": "^1.1.2",
+    "apostrophe": "^4.33.0",
+    "cross-env": "^10.1.0",
+    "dotenv": "^17.4.2",
+    "normalize.css": "^8.0.1",
+    "supertext-apostrophe-translation": "file:./module"
+  },
+  "allowScripts": {
+    "@parcel/watcher": true,
+    "better-sqlite3": true,
+    "esbuild": true,
+    "fsevents": true,
+    "sharp": true,
+    "unrs-resolver": true,
+    "vue-demi": true
+  },
+  "private": true
+}

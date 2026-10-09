@@ -1,0 +1,74 @@
+name: Release
+
+# Publishes a GitHub release when the version is officially bumped: a new
+# "## X.Y.Z" section at the top of CHANGELOG.md (below Unreleased), with every
+# file in VERSION_FILES carrying the same number. Pushes that add no new
+# version do nothing, and a version that is already released is skipped.
+# 0.x versions are published as pre-releases. See docs/DEVELOPER.md → Releasing.
+
+on:
+  push:
+    branches: [main]
+    paths: [CHANGELOG.md, .github/workflows/release.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # Files that must carry the released version (empty: the Git tag is the version).
+  VERSION_FILES: "package.json"
+  GH_REPO: ${{ github.repository }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the version from CHANGELOG.md
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 -oE '^## \[?[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+          if [ -z "$version" ]; then
+            echo "No released version in CHANGELOG.md yet, nothing to do."
+            echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "v$version is already released, nothing to do."
+            echo "release=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          for f in $VERSION_FILES; do
+            if ! grep -qF "$version" "$f"; then
+              echo "::error file=$f::CHANGELOG.md says $version, but $f doesn't. Bump it there too."
+              exit 1
+            fi
+          done
+          awk -v v="$version" '/^## /{ if (p) exit; if (index($0, v) && $0 ~ /^## \[?[0-9]/) { p=1; next } } p' CHANGELOG.md > section.md
+          {
+            if [ "${version%%.*}" = "0" ]; then printf '**Pre-release.** '; fi
+            echo "Install and setup: [installation guide](https://github.com/$GH_REPO/blob/v$version/docs/INSTALLATION.md)."
+            echo
+            echo "## What's in $version"
+            cat section.md
+          } > notes.md
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        if: steps.version.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          pre=()
+          if [ "${VERSION%%.*}" = "0" ]; then pre=(--prerelease); fi
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION" \
+            --notes-file notes.md "${pre[@]}"
+          echo "Released https://github.com/$GH_REPO/releases/tag/v$VERSION"

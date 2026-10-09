@@ -1,0 +1,12 @@
+{
+  "name": "apostrophe-supertext-docs-screenshots",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "stand-in": "node stand-in.mjs",
+    "screenshots": "node screenshots.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}
