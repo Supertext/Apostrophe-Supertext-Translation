@@ -121,7 +121,7 @@ The script drops nothing: run it against a fresh database (it uses `supertext_ap
 
 ## Demo
 
-`demo/` is the public demo on Railway (project *supertext-cms-demos*, service *Apostrophe*): Apostrophe's essentials starter kit (MIT, see `demo/LICENSE-starter-kit`) with four locales (en, de, fr, it), a simple layout with a language switcher, an *article* piece type and this module (`de-CH`, `fr-CH`, `it-CH`, formal).
+`demo/` is the public demo on Railway (project *supertext-cms-demos*, service *Apostrophe*, <https://apostrophe-production-986f.up.railway.app>): Apostrophe's essentials starter kit (MIT, see `demo/LICENSE-starter-kit`) with four locales (en, de, fr, it), a simple layout with a language switcher, an *article* piece type and this module (`de-CH`, `fr-CH`, `it-CH`, formal).
 
 - `demo/Dockerfile` (build context: repository root) installs the demo with the module copied in and builds the admin assets.
 - `demo/docker/entrypoint.sh` creates the demo's own database `APOSTROPHE_DB_NAME` (default `supertext_apostrophe`) on the Postgres server in `DATABASE_URL` if needed, runs Apostrophe's migrations and `supertext-demo:setup`, then starts Apostrophe. `demo/app.js` derives `APOS_DB_URI` from the same variables, so `docker exec demo node app <task>` works too.

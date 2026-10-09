@@ -15,7 +15,7 @@ Translates titles and text fields, rich text (a paragraph at a time, with format
 
 ![Apostrophe's Localize Content wizard with "Translate text content" ticked and the note "Translated by Supertext AI"](docs/images/localize-translate.png)
 
-**Live demo:** DEMO_URL (credentials from the Supertext team)
+**Live demo:** <https://apostrophe-production-986f.up.railway.app> (credentials from the Supertext team)
 
 **Requirements:** ApostropheCMS 4.13+ on Node.js 22.12+, a Supertext account and an API key, set as `SUPERTEXT_API_KEY`. No Supertext account yet? [Create one at supertext.com](https://www.supertext.com/person/en/account/signin). Generate your API key at supertext.com → [Integrations → API](https://www.supertext.com/en/integrations/api) (requires the Admin role).
 
