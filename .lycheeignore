@@ -1,0 +1,2 @@
+# Supertext API base URLs: endpoints, not pages (the bare base path returns 404)
+^https://api(\.staging|\.testing)?\.supertext\.com/v1/?$
