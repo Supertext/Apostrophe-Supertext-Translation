@@ -38,10 +38,15 @@ Every Supertext plugin repo has, and a new one gets from the start:
 - `LICENSE` matching the license its manifest declares (`composer.json`, `package.json`, `pyproject.toml`, `.csproj`, plugin header). Don't pick a license for a repo that declares none: ask Remy.
 - `SECURITY.md`: report vulnerabilities privately through GitHub's private vulnerability reporting or support@supertext.com, never in public issues.
 - `.github/dependabot.yml`: weekly updates for its package ecosystem and GitHub Actions, minor and patch updates grouped into one pull request.
-- On GitHub: the About box filled in (one-sentence description, website https://www.supertext.com, topics), `main` protected by the ruleset "Protect main" (no force-pushes, no deletion), Wiki and Projects off, Dependabot alerts and private vulnerability reporting on, and a social preview image (1280×640, same design as the others: "AI translation for <System>").
+- `.github/workflows/checks.yml` (actionlint + zizmor on every push and PR, dependency review on PRs) and `.github/workflows/links.yml` (lychee weekly and on docs changes; broken links open the issue "Broken links in the docs"). Third-party actions are pinned to commit SHAs.
+- On GitHub: the About box filled in (one-sentence description, website https://www.supertext.com, topics), `main` protected by the ruleset "Protect main" (no force-pushes, no deletion), Wiki and Projects off, Dependabot alerts and private vulnerability reporting on, secret scanning with push protection and CodeQL default setup on, and a social preview image (1280×640, same design as the others: "AI translation for <System>").
 - A row in the plugin list (see *Plugin list*), which is also the org profile page (`Supertext/.github` → `profile/README.md`).
 
 Claude sessions can't change GitHub repo settings or push to `Supertext/.github` (HTTP 403 / dot-repos can't be attached): add the new repo to Remy's setup script (`set-github-about.sh` / `.ps1`, one `setup` line with repo, description and topics) and hand him the profile change.
+
+## Checks and alerts (always)
+
+Before starting work in a repo, look at its open findings and fix what the task touches or what is quick: code scanning alerts (`gh api 'repos/Supertext/Apostrophe-Supertext-Translation/code-scanning/alerts?state=open'`), secret scanning alerts (`…/secret-scanning/alerts?state=open`), open Dependabot PRs and the issue "Broken links in the docs". New workflows and workflow changes must pass actionlint and zizmor; PHP code must pass PHPStan at the repo's level. See `docs/DEVELOPER.md` → *Code quality and security checks*.
 
 ## Plugin list (always)
 
