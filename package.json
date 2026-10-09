@@ -41,6 +41,6 @@
     "apostrophe": "^4.13.0"
   },
   "dependencies": {
-    "node-html-parser": "^7.0.1"
+    "node-html-parser": "^9.0.4"
   }
 }
