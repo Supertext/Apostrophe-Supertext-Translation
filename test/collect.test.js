@@ -64,9 +64,41 @@ test('translates and writes back through a client', async () => {
 });
 
 test('language mapping', () => {
-  assert.equal(languageCode('de_CH'), 'de-CH');
-  assert.equal(languageCode('de', { de: { code: 'de-CH' } }), 'de-CH');
   assert.equal(politeness('de', { de: { politeness: 'less' } }), 'less');
   assert.equal(politeness('fr'), 'default');
+});
+
+test('source: bare language stays bare', () => {
+  assert.equal(sourceCode('en'), 'en');
+});
+
+test('source: regional code becomes the bare language', () => {
   assert.equal(sourceCode('pt-BR'), 'pt');
+  assert.equal(sourceCode('en_GB'), 'en');
+  assert.equal(sourceCode(languageCode('DE-ch')), 'de');
+});
+
+test('target: bare language gets its default region', () => {
+  assert.equal(languageCode('de'), 'de-DE');
+  assert.equal(languageCode('en'), 'en-US');
+  assert.equal(languageCode('sl'), 'sl-SI');
+  assert.equal(languageCode('ZH'), 'zh-CN');
+});
+
+test('target: regional code is kept and normalized', () => {
+  assert.equal(languageCode('de-CH'), 'de-CH');
+  assert.equal(languageCode('de_CH'), 'de-CH');
+  assert.equal(languageCode('fr-ch'), 'fr-CH');
+  assert.equal(languageCode('zh-hant'), 'zh-Hant');
+  assert.equal(languageCode('es-419'), 'es-419');
+});
+
+test('target: configured code wins (source uses its language)', () => {
+  assert.equal(languageCode('de', { de: { code: 'de-CH' } }), 'de-CH');
+  assert.equal(languageCode('ch', { ch: { code: 'de_ch' } }), 'de-CH');
+  assert.equal(sourceCode(languageCode('ch', { ch: { code: 'de-CH' } })), 'de');
+});
+
+test('target: unknown bare code is sent unchanged', () => {
+  assert.equal(languageCode('xx'), 'xx');
 });

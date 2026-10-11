@@ -64,7 +64,7 @@ Keep this table and "What is translated" in `docs/USER_GUIDE.md` in sync with `l
 
 AI file translation API v1, the same as the WordPress plugin:
 
-1. `POST {base}translate/ai/file` (multipart: `file` = `content.html` with content type exactly `text/html`, `target_lang`, `source_lang` = primary subtag of the source, `politeness` = `more`/`less` when set) → `{ file_id }`.
+1. `POST {base}translate/ai/file` (multipart: `file` = `content.html` with content type exactly `text/html`, `target_lang`, `source_lang` = bare language of the source (see *Language codes*), `politeness` = `more`/`less` when set) → `{ file_id }`.
 2. Poll `GET {base}translate/ai/file/{id}/status` every `pollInterval` seconds until `done` (or `error` / `limit_exceeded` / `deleted`, or `timeout`).
 3. `GET {base}translate/ai/file/{id}/translation` → translated HTML.
 4. `DELETE {base}translate/ai/file/{id}` (best effort).
@@ -75,6 +75,15 @@ AI file translation API v1, the same as the WordPress plugin:
 - **Rate limit:** HTTP 429 is retried up to 4 times (`Retry-After`, else 1/2/4/8 s plus jitter). Locales are translated one after the other (Apostrophe's wizard does that already).
 - **Document:** one `<div data-st-id="n">` per unit in a UTF-8 HTML document (`lib/document.js`). Each `data-st-id` element is translated on its own, so a whole paragraph is one unit with its formatting as inline tags; never one unit per formatted run. Very large documents are split into several files below 900,000 characters.
 - Base URLs: `live` `https://api.supertext.com/v1/`, `staging` `https://api.staging.supertext.com/v1/`, `testing` `https://api.testing.supertext.com/v1/`; `SUPERTEXT_API_URL` / `apiUrl` override them.
+
+### Language codes (`lib/translate.js`)
+
+Supertext's rule (from testing the live API): **source = bare language** (`en`, `de`), **target = regional code** (`de-DE`, `fr-CH`, `en-US`). A regional source or a bare target is rejected with `INVALID_LANGUAGE_PAIR`. Translating within one language (source `en`, target `en-GB`) is allowed.
+
+- `languageCode(locale, languages)` gives the target code: the `languages.<locale>.code` option wins, else the locale name. It is normalized (`de_ch`/`de-ch` → `de-CH`; scripts and numeric regions keep their form: `zh-Hant`, `es-419`), and a bare language gets its default region from `DEFAULT_REGIONS`: ar→ar-SA, bg→bg-BG, cs→cs-CZ, da→da-DK, de→de-DE, el→el-GR, en→en-US, es→es-ES, et→et-EE, fi→fi-FI, fr→fr-FR, hr→hr-HR, hu→hu-HU, it→it-IT, ja→ja-JP, ko→ko-KR, lt→lt-LT, lv→lv-LV, nb→nb-NO, nl→nl-NL, pl→pl-PL, pt→pt-PT, ro→ro-RO, ru→ru-RU, sk→sk-SK, sl→sl-SI, sr→sr-RS, sv→sv-SE, th→th-TH, tr→tr-TR, uk→uk-UA, vi→vi-VN, zh→zh-CN (same table as the other Supertext plugins). Unknown bare codes are sent unchanged, so Supertext's error names them. The status screen shows this code per locale.
+- `sourceCode(code)` takes the language of the source locale's code (`de-CH` → `de`).
+
+The stand-in (`tests/docs/stand-in.mjs`) rejects bare targets and regional sources like the real API.
 
 ## Local development
 
