@@ -103,7 +103,12 @@ export default {
 };
 ```
 
-By default the locale name is sent to Supertext as the language (`de`, `fr`, `pt_BR` → `pt-BR`). Use the `languages` option to send a regional variant or to choose the form of address:
+By default the locale name is turned into the Supertext language:
+
+- **Target languages** are always sent with a region, because Supertext rejects bare targets: a locale with a region keeps it (`pt_BR` → `pt-BR`); a bare one gets the usual default (`de` → `de-DE`, `fr` → `fr-FR`, `it` → `it-IT`, `en` → `en-US`, `pt` → `pt-PT`, `zh` → `zh-CN`, …).
+- **The source language** is sent without region (`de-CH` → `de`), because Supertext rejects regional source codes.
+
+Use the `languages` option to send another regional variant (it wins over the default; for the source, its language is used) or to choose the form of address:
 
 ```js
 languages: {
@@ -126,7 +131,7 @@ All settings are options of the `supertext-apostrophe-translation` module in `ap
 | `apiKey` | `''` | Supertext API key. The environment variable `SUPERTEXT_API_KEY` takes precedence. |
 | `environment` | `'live'` | Supertext API environment: `live` (`https://api.supertext.com/v1/`), `staging` or `testing`. |
 | `apiUrl` | `''` | Custom API address (overrides `environment`). The environment variable `SUPERTEXT_API_URL` takes precedence. Only for tests against a stand-in. |
-| `languages` | `{}` | Per locale: `{ code, politeness }`. `code` is the Supertext language (e.g. `de-CH`); `politeness` is `more` (formal), `less` (informal) or left out (Supertext's default). |
+| `languages` | `{}` | Per locale: `{ code, politeness }`. `code` is the Supertext language with region (e.g. `de-CH`; without it, bare locales get a default region: `de` → `de-DE`); `politeness` is `more` (formal), `less` (informal) or left out (Supertext's default). |
 | `translateSlugs` | `true` | New localizations get a slug made from the translated title (`/swiss-chocolate` → `/de/schweizer-schokolade…`). Re-translating keeps the slug the localized document already has. Set to `false` to keep Apostrophe's default (the source slug). |
 | `skipWidgets` | `['@apostrophecms/html']` | Widget types that are never translated. |
 | `timeout` | `180` | Seconds to wait for one translation before giving up. |

@@ -36,7 +36,11 @@ http
       const file = form.get('file')
       if (!file || file.type !== 'text/html') return send(415, { detail: 'FILETYPE_NOT_ALLOWED' })
       const id = randomBytes(6).toString('hex')
-      files.set(id, { html: await file.text(), target: String(form.get('target_lang')) })
+      const target = String(form.get('target_lang'))
+      const source = form.get('source_lang')
+      // Like the real API: bare targets (`de`) and regional sources (`de-CH`) are rejected.
+      if (!target.includes('-') || (typeof source === 'string' && source.includes('-'))) return send(400, { error_code: 'INVALID_LANGUAGE_PAIR' })
+      files.set(id, { html: await file.text(), target })
       return send(200, { file_id: id })
     }
     const match = path.match(/file\/([a-f0-9]+)(\/status|\/translation)?$/)
