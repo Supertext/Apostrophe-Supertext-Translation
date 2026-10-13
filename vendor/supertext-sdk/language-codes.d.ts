@@ -7,7 +7,11 @@
 export declare const DEFAULT_REGIONS: Readonly<Record<string, string>>;
 /** CMS locale → Supertext code, e.g. `{ no: 'nb-NO', de: 'de-CH' }`. */
 export type LanguageOverrides = Readonly<Record<string, string>>;
-/** `de_ch` → `de-CH`, `ZH_HANT_TW` → `zh-Hant-TW`, `es-419` stays. */
+/**
+ * `de_ch` → `de-CH`, `ZH_HANT_TW` → `zh-Hant-TW`, `es-419` stays. Variants and extensions after a
+ * script or region are dropped (`de_DE_formal` → `de-DE`, `en-US-x-twain` → `en-US`); a code whose
+ * second subtag is neither a script nor a region is kept (`de-CHE`) and isn't valid.
+ */
 export declare function normalize(code: string): string;
 /** The source code to send: the bare language (`en-US` → `en`). `''` stays `''` (auto-detect). */
 export declare function source(code: string, overrides?: LanguageOverrides): string;

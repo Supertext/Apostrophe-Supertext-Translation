@@ -12,19 +12,36 @@ export const DEFAULT_REGIONS = Object.freeze({
     sk: 'sk-SK', sl: 'sl-SI', sr: 'sr-RS', sv: 'sv-SE', th: 'th-TH', tr: 'tr-TR',
     uk: 'uk-UA', vi: 'vi-VN', zh: 'zh-CN',
 });
-/** `de_ch` → `de-CH`, `ZH_HANT_TW` → `zh-Hant-TW`, `es-419` stays. */
+const SCRIPT = /^[A-Za-z]{4}$/;
+const REGION = /^([A-Za-z]{2}|[0-9]{3})$/;
+/**
+ * `de_ch` → `de-CH`, `ZH_HANT_TW` → `zh-Hant-TW`, `es-419` stays. Variants and extensions after a
+ * script or region are dropped (`de_DE_formal` → `de-DE`, `en-US-x-twain` → `en-US`); a code whose
+ * second subtag is neither a script nor a region is kept (`de-CHE`) and isn't valid.
+ */
 export function normalize(code) {
     const [language = '', ...subtags] = code.trim().replace(/_/g, '-').split('-');
+    const out = [language.toLowerCase()];
+    let next = 0;
+    if (next < subtags.length && SCRIPT.test(subtags[next]))
+        out.push(titleCase(subtags[next++]));
+    if (next < subtags.length && REGION.test(subtags[next]))
+        out.push(subtags[next++].toUpperCase());
+    if (next > 0)
+        return out.join('-');
     return [
-        language.toLowerCase(),
+        out[0],
         ...subtags.map((tag) => {
             if (/^[A-Za-z]{2}$/.test(tag))
                 return tag.toUpperCase(); // region
-            if (/^[A-Za-z]{4}$/.test(tag))
-                return tag[0].toUpperCase() + tag.slice(1).toLowerCase(); // script
-            return tag; // numeric regions (419) and anything else
+            if (SCRIPT.test(tag))
+                return titleCase(tag); // script
+            return tag; // anything else
         }),
     ].join('-');
+}
+function titleCase(tag) {
+    return tag[0].toUpperCase() + tag.slice(1).toLowerCase();
 }
 /** The non-blank override for `code`; keys are compared normalized (`de_AT` matches `de-at`). */
 function override(code, overrides) {

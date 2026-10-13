@@ -27,12 +27,12 @@ Keep `lib/` free of Apostrophe imports: the unit tests run without Apostrophe.
 
 ### Supertext SDK (`vendor/supertext-sdk`)
 
-All talking to Supertext goes through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`, npm name `supertext-sdk`), the shared client of all Supertext plugins. The module ships its own copy of the SDK's built JavaScript in `vendor/supertext-sdk/` (sites install only the module, also once the SDK is on npm; Apostrophe modules have no build step that could bundle it) (ES modules, loaded with `require()`, which Node 22.12+ supports); `vendor/supertext-sdk/COMMIT` names the SDK commit and its `package.json` the version. Never edit those files: fix the SDK repository and copy it again:
+All talking to Supertext goes through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`, npm name `supertext-sdk`), the shared client of all Supertext plugins. The module ships its own copy of the SDK's built JavaScript in `vendor/supertext-sdk/` (sites install only the module, also once the SDK is on npm; Apostrophe modules have no build step that could bundle it) (ES modules, loaded with `require()`, which Node 22.12+ supports). `COMMIT` names the SDK commit, `VERSION` the SDK version, and the copy's `package.json` only marks the files as ES modules. Never edit those files: fix the SDK repository and copy it again with `scripts/vendor-sdk.sh [ref]` (it builds the SDK and replaces the copy entirely):
 
 ```bash
-npm run vendor-sdk                 # latest main of the SDK repository
-scripts/vendor-sdk.sh v0.2.0       # a tag or commit
-SDK_DIR=../Supertext-API-SDK-and-Guide scripts/vendor-sdk.sh   # a local checkout
+scripts/vendor-sdk.sh                  # latest main of the SDK repository (also: npm run vendor-sdk)
+scripts/vendor-sdk.sh <commit|branch>  # a tag, branch or commit
+SDK_DIR=/path/to/Supertext-API-SDK-and-Guide scripts/vendor-sdk.sh   # a local clone, as it is
 ```
 
 Then run the tests and the demo check, and note the new SDK version in `CHANGELOG.md`. `check` prints the SDK version.
