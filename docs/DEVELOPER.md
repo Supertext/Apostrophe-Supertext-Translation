@@ -12,8 +12,8 @@ lib/sdk.js                   loads the vendored Supertext SDK; API addresses per
 lib/document.js              text units: one per plain-text field, one per rich-text paragraph
 lib/collect.js               field rules: finds the texts of a document by its schema
 lib/translate.js             language codes, form of address, sends units through the SDK
-vendor/supertext-sdk/        the Supertext TypeScript SDK (built JavaScript), copied by scripts/sync-sdk.sh
-scripts/sync-sdk.sh          updates vendor/supertext-sdk from the SDK repository
+vendor/supertext-sdk/        the Supertext TypeScript SDK (built JavaScript), copied by scripts/vendor-sdk.sh
+scripts/vendor-sdk.sh          updates vendor/supertext-sdk from the SDK repository
 i18n/supertext/<lang>.json   UI strings (en, de, fr, it), namespace "supertext"
 i18n/apostrophe/<lang>.json  overrides Apostrophe's automaticTranslationDisclaimer
 ui/apos/components/SupertextStatusModal.vue   admin status screen
@@ -27,15 +27,15 @@ Keep `lib/` free of Apostrophe imports: the unit tests run without Apostrophe.
 
 ### Supertext SDK (`vendor/supertext-sdk`)
 
-All talking to Supertext goes through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`, npm name `supertext-sdk`), the shared client of all Supertext plugins. Until it is published on npm, the module ships a copy of its built JavaScript in `vendor/supertext-sdk/` (ES modules, loaded with `require()`, which Node 22.12+ supports); `vendor/supertext-sdk/SOURCE` names the SDK version and commit. Never edit those files: fix the SDK repository and copy it again:
+All talking to Supertext goes through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`, npm name `supertext-sdk`), the shared client of all Supertext plugins. The module ships its own copy of the SDK's built JavaScript in `vendor/supertext-sdk/` (sites install only the module, also once the SDK is on npm; Apostrophe modules have no build step that could bundle it) (ES modules, loaded with `require()`, which Node 22.12+ supports); `vendor/supertext-sdk/COMMIT` names the SDK commit and its `package.json` the version. Never edit those files: fix the SDK repository and copy it again:
 
 ```bash
-npm run sync-sdk                 # latest main of the SDK repository
-scripts/sync-sdk.sh v0.2.0       # a tag or commit
-SDK_DIR=../Supertext-API-SDK-and-Guide scripts/sync-sdk.sh   # a local checkout
+npm run vendor-sdk                 # latest main of the SDK repository
+scripts/vendor-sdk.sh v0.2.0       # a tag or commit
+SDK_DIR=../Supertext-API-SDK-and-Guide scripts/vendor-sdk.sh   # a local checkout
 ```
 
-Then run the tests and the demo check, and note the new SDK version in `CHANGELOG.md`. Once the SDK is on npm, `supertext-sdk` becomes a normal dependency, `lib/sdk.js` requires it instead of the copy, and `vendor/` and the script go away. `check` prints the SDK version.
+Then run the tests and the demo check, and note the new SDK version in `CHANGELOG.md`. `check` prints the SDK version.
 
 ### Hook point: Apostrophe's translation provider API
 
@@ -180,7 +180,7 @@ Railway settings (set on the service; `railway.json` is ignored): Dockerfile pat
 
 Dependabot (`.github/dependabot.yml`) opens weekly pull requests: minor and patch updates grouped into one, GitHub Actions in another, each major update on its own. Merge one when CI is green and it doesn't change what the plugin supports.
 
-`vendor/supertext-sdk` isn't watched by Dependabot: update it with `npm run sync-sdk` (see *Supertext SDK*).
+`vendor/supertext-sdk` isn't watched by Dependabot: update it with `npm run vendor-sdk` (see *Supertext SDK*).
 
 Some major versions are ignored on purpose: TypeScript (7.x is the native compiler, which the type-checking and build tools here don't support yet) and `@types/node` (the types must match the oldest Node version the plugin supports, not the newest). Lift an ignore rule when the plugin moves to the new version.
 

@@ -9,8 +9,8 @@ test('the vendored SDK loads and says where it comes from', () => {
   assert.equal(typeof SupertextClient, 'function');
   assert.equal(typeof SupertextError, 'function');
   assert.match(SDK_VERSION, /^\d+\.\d+\.\d+/);
-  const source = fs.readFileSync(path.join(__dirname, '../vendor/supertext-sdk/SOURCE'), 'utf8');
-  assert.match(source, /Supertext-API-SDK-and-Guide/);
+  const source = fs.readFileSync(path.join(__dirname, '../vendor/supertext-sdk/COMMIT'), 'utf8');
+  assert.match(source, /^[0-9a-f]{40}\n$/);
 });
 
 test('API address and key helpers', () => {

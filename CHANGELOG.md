@@ -17,7 +17,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
-- The connection to Supertext now uses the shared [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (TypeScript SDK 0.1.0, shipped in `vendor/supertext-sdk` until it is on npm). Translation works as before; some error messages are worded differently (e.g. *Supertext rejected the API key. Please check it.*), the file at Supertext is also deleted after errors, and `check` shows the SDK version.
+- The connection to Supertext now uses the shared [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (TypeScript SDK 0.1.0, shipped with the module in `vendor/supertext-sdk`, so nothing else needs installing). Translation works as before; some error messages are worded differently (e.g. *Supertext rejected the API key. Please check it.*), the file at Supertext is also deleted after errors, and `check` shows the SDK version.
 
 ### Fixed
 
