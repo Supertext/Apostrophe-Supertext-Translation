@@ -7,6 +7,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 ### Added
 
 - Supertext as a translation provider for Apostrophe's own *Localize…* step: with *Translate text content* ticked, pages and pieces (single or batch, and their related documents) are translated by Supertext AI before Apostrophe saves them as drafts.
+- An unknown language (e.g. `xx-YY`) is now reported as an unsupported language pair too, not as "resource not found" (Supertext answers it with HTTP 404).
 - Translates string fields, rich text (one paragraph, heading, list item or table cell at a time, formatting and links kept), the fields of other widgets, arrays and objects at any depth. `translate: false` fields and HTML widgets are skipped.
 - New localizations get a slug from the translated title; re-translating keeps the existing slug.
 - Options `languages` (Supertext language and formal/informal address per locale), `translateSlugs`, `skipWidgets`, `environment`, `apiUrl`, `timeout`, `pollInterval`; API key from `SUPERTEXT_API_KEY` or `apiKey`.
