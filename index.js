@@ -10,7 +10,7 @@
  * administrators and the tasks `check` and `translate`.
  */
 
-const { SupertextClient, SupertextError, baseUrlFor, normalizeKey } = require('./lib/client');
+const { SupertextClient, SupertextError, SDK_VERSION, baseUrlFor, normalizeKey } = require('./lib/sdk');
 const { collectUnits } = require('./lib/collect');
 const { languageCode, politeness, translateUnits } = require('./lib/translate');
 const { version } = require('./package.json');
@@ -90,11 +90,11 @@ module.exports = {
       },
 
       client() {
-        return new SupertextClient({
-          apiKey: self.apiKey(),
+        return new SupertextClient(self.apiKey(), {
           baseUrl: self.baseUrl(),
           timeoutMs: Number(self.options.timeout || 180) * 1000,
-          pollIntervalMs: Number(self.options.pollInterval ?? 2) * 1000
+          pollIntervalMs: Number(self.options.pollInterval ?? 2) * 1000,
+          userAgent: `supertext-apostrophe-translation/${self.version}`
         });
       },
 
@@ -290,6 +290,7 @@ module.exports = {
           const release = self.releaseUrl();
           console.log(`Supertext Translation for Apostrophe ${self.version}${release ? ` (${release})` : ''}`);
           console.log(`API address: ${self.baseUrl()}`);
+          console.log(`Supertext SDK: ${SDK_VERSION}`);
           if (!self.apiKey()) {
             console.log('No API key. Set the SUPERTEXT_API_KEY environment variable.');
             console.log(KEY_HELP);

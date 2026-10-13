@@ -47,11 +47,14 @@ test('translates and writes back through a client', async () => {
   const d = doc();
   const units = collectUnits(d, schema, (t) => widgetSchemas[t] || null);
   const fakeClient = {
-    async translateHtml({ html, targetLang, sourceLang, politeness: p }) {
-      assert.equal(targetLang, 'de-CH');
+    async translateTexts(segments, target, { sourceLang, politeness: p }) {
+      assert.ok(segments instanceof Map);
+      assert.equal(target, 'de-CH');
       assert.equal(sourceLang, 'en');
       assert.equal(p, 'more');
-      return html.replace(/(<div data-st-id="\d+">)/g, '$1DE ');
+      assert.deepEqual(segments.get('0'), { text: 'Hello', html: false });
+      assert.deepEqual(segments.get('2'), { text: 'One', html: true });
+      return new Map([ ...segments ].map(([ key, s ]) => [ key, `DE ${s.text}` ]));
     }
   };
   const missing = await translateUnits(fakeClient, units, 'en', 'de', { de: { code: 'de-CH', politeness: 'more' } });

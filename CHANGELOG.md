@@ -15,6 +15,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Interface in English, German, French and Italian.
 - Retries when Supertext's per-second rate limit is hit; the API key works with or without the `Supertext-Auth-Key ` prefix.
 
+### Changed
+
+- The connection to Supertext now uses the shared [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (TypeScript SDK 0.1.0, shipped in `vendor/supertext-sdk` until it is on npm). Translation works as before; some error messages are worded differently (e.g. *Supertext rejected the API key. Please check it.*), the file at Supertext is also deleted after errors, and `check` shows the SDK version.
+
 ### Fixed
 
 - Target languages without a region (e.g. the locale `de` without a `languages` code) are now sent to Supertext as `de-DE` (`fr` → `fr-FR`, `en` → `en-US`, …); Supertext rejected them with `INVALID_LANGUAGE_PAIR`. Regional codes are normalized (`de-ch` → `de-CH`).

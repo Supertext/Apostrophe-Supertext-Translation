@@ -8,6 +8,7 @@ COPY demo/ /app/demo/
 # The module itself goes to demo/module, which the demo installs (install-links: a copy).
 COPY package.json index.js /app/demo/module/
 COPY lib /app/demo/module/lib
+COPY vendor /app/demo/module/vendor
 COPY i18n /app/demo/module/i18n
 COPY ui /app/demo/module/ui
 RUN npm ci --no-audit --no-fund \

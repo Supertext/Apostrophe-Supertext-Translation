@@ -6,4 +6,4 @@ set -e
 cd "$(dirname "$0")/.."
 rm -rf demo/module
 mkdir -p demo/module
-cp -R package.json index.js lib i18n ui demo/module/
+cp -R package.json index.js lib vendor i18n ui demo/module/

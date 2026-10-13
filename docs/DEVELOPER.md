@@ -8,10 +8,12 @@ The package is one Apostrophe module, `supertext-apostrophe-translation` (alias 
 
 ```
 index.js                     the module: provider, status screen, API routes, tasks
-lib/client.js                Supertext AI file API v1 client (no Apostrophe imports)
-lib/document.js              HTML document with one data-st-id element per text unit
+lib/sdk.js                   loads the vendored Supertext SDK; API addresses per environment
+lib/document.js              text units: one per plain-text field, one per rich-text paragraph
 lib/collect.js               field rules: finds the texts of a document by its schema
-lib/translate.js             language codes, form of address, sends units and applies results
+lib/translate.js             language codes, form of address, sends units through the SDK
+vendor/supertext-sdk/        the Supertext TypeScript SDK (built JavaScript), copied by scripts/sync-sdk.sh
+scripts/sync-sdk.sh          updates vendor/supertext-sdk from the SDK repository
 i18n/supertext/<lang>.json   UI strings (en, de, fr, it), namespace "supertext"
 i18n/apostrophe/<lang>.json  overrides Apostrophe's automaticTranslationDisclaimer
 ui/apos/components/SupertextStatusModal.vue   admin status screen
@@ -22,6 +24,18 @@ demo/                        Railway demo site (Apostrophe starter kit + this mo
 ```
 
 Keep `lib/` free of Apostrophe imports: the unit tests run without Apostrophe.
+
+### Supertext SDK (`vendor/supertext-sdk`)
+
+All talking to Supertext goes through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`, npm name `supertext-sdk`), the shared client of all Supertext plugins. Until it is published on npm, the module ships a copy of its built JavaScript in `vendor/supertext-sdk/` (ES modules, loaded with `require()`, which Node 22.12+ supports); `vendor/supertext-sdk/SOURCE` names the SDK version and commit. Never edit those files: fix the SDK repository and copy it again:
+
+```bash
+npm run sync-sdk                 # latest main of the SDK repository
+scripts/sync-sdk.sh v0.2.0       # a tag or commit
+SDK_DIR=../Supertext-API-SDK-and-Guide scripts/sync-sdk.sh   # a local checkout
+```
+
+Then run the tests and the demo check, and note the new SDK version in `CHANGELOG.md`. Once the SDK is on npm, `supertext-sdk` becomes a normal dependency, `lib/sdk.js` requires it instead of the copy, and `vendor/` and the script go away. `check` prints the SDK version.
 
 ### Hook point: Apostrophe's translation provider API
 
@@ -60,28 +74,29 @@ Units are collected by walking the document type's schema (`apos.doc.getManager(
 
 Keep this table and "What is translated" in `docs/USER_GUIDE.md` in sync with `lib/collect.js`.
 
-### Supertext API protocol (`lib/client.js`)
+### Supertext API protocol (the SDK)
 
-AI file translation API v1, the same as the WordPress plugin:
+AI file translation API v1, the same as the WordPress plugin. The SDK does all of it; `lib/translate.js` calls `client.translateTexts()` once per document and locale with one segment per text unit (`{ text, html }`: plain-text fields as plain text, rich-text paragraphs as HTML):
 
-1. `POST {base}translate/ai/file` (multipart: `file` = `content.html` with content type exactly `text/html`, `target_lang`, `source_lang` = bare language of the source (see *Language codes*), `politeness` = `more`/`less` when set) → `{ file_id }`.
+1. `POST {base}translate/ai/file` (multipart: `file` = `content.html` with content type exactly `text/html`, `target_lang`, `source_lang` = bare language of the source, `politeness` = `more`/`less` when set) → `{ file_id }`.
 2. Poll `GET {base}translate/ai/file/{id}/status` every `pollInterval` seconds until `done` (or `error` / `limit_exceeded` / `deleted`, or `timeout`).
 3. `GET {base}translate/ai/file/{id}/translation` → translated HTML.
-4. `DELETE {base}translate/ai/file/{id}` (best effort).
+4. `DELETE {base}translate/ai/file/{id}` (also after errors).
 
-`check` and *Test connection* call `GET {base}features`, which costs nothing.
+`check` and *Test connection* call `validateApiKey()` (`GET {base}features`), which costs nothing.
 
 - **Auth:** `Authorization: Supertext-Auth-Key <key>`. A pasted `Supertext-Auth-Key ` prefix is stripped, so exactly one is sent.
 - **Rate limit:** HTTP 429 is retried up to 4 times (`Retry-After`, else 1/2/4/8 s plus jitter). Locales are translated one after the other (Apostrophe's wizard does that already).
-- **Document:** one `<div data-st-id="n">` per unit in a UTF-8 HTML document (`lib/document.js`). Each `data-st-id` element is translated on its own, so a whole paragraph is one unit with its formatting as inline tags; never one unit per formatted run. Very large documents are split into several files below 900,000 characters.
-- Base URLs: `live` `https://api.supertext.com/v1/`, `staging` `https://api.staging.supertext.com/v1/`, `testing` `https://api.testing.supertext.com/v1/`; `SUPERTEXT_API_URL` / `apiUrl` override them.
+- **Document:** one `<div data-st-id="n">` per segment in a UTF-8 HTML document. Each `data-st-id` element is translated on its own, so a whole paragraph is one unit with its formatting as inline tags; never one unit per formatted run. More than 900,000 characters go into several documents, translated one after the other.
+- **Errors:** a `SupertextError` with a stable `code` (`authentication_failure`, `quota_exceeded`, `too_many_requests`, `timeout`, …) and an English message; the API key never appears in it. The module logs it, notifies the editor and adds the API key links on `authentication_failure`.
+- Base URLs (`lib/sdk.js`): `live` `https://api.supertext.com/v1/`, `staging` `https://api.staging.supertext.com/v1/`, `testing` `https://api.testing.supertext.com/v1/`; `SUPERTEXT_API_URL` / `apiUrl` override them. The User-Agent is `supertext-sdk-typescript supertext-apostrophe-translation/<version>`.
 
 ### Language codes (`lib/translate.js`)
 
 Supertext's rule (from testing the live API): **source = bare language** (`en`, `de`), **target = regional code** (`de-DE`, `fr-CH`, `en-US`). A regional source or a bare target is rejected with `INVALID_LANGUAGE_PAIR`. Translating within one language (source `en`, target `en-GB`) is allowed.
 
-- `languageCode(locale, languages)` gives the target code: the `languages.<locale>.code` option wins, else the locale name. It is normalized (`de_ch`/`de-ch` → `de-CH`; scripts and numeric regions keep their form: `zh-Hant`, `es-419`), and a bare language gets its default region from `DEFAULT_REGIONS`: ar→ar-SA, bg→bg-BG, cs→cs-CZ, da→da-DK, de→de-DE, el→el-GR, en→en-US, es→es-ES, et→et-EE, fi→fi-FI, fr→fr-FR, hr→hr-HR, hu→hu-HU, it→it-IT, ja→ja-JP, ko→ko-KR, lt→lt-LT, lv→lv-LV, nb→nb-NO, nl→nl-NL, pl→pl-PL, pt→pt-PT, ro→ro-RO, ru→ru-RU, sk→sk-SK, sl→sl-SI, sr→sr-RS, sv→sv-SE, th→th-TH, tr→tr-TR, uk→uk-UA, vi→vi-VN, zh→zh-CN (same table as the other Supertext plugins). Unknown bare codes are sent unchanged, so Supertext's error names them. The status screen shows this code per locale.
-- `sourceCode(code)` takes the language of the source locale's code (`de-CH` → `de`).
+- `languageCode(locale, languages)` gives the target code through the SDK's `LanguageCodes.target()`: the `languages.<locale>.code` option wins, else the locale name. It is normalized (`de_ch`/`de-ch` → `de-CH`; scripts and numeric regions keep their form: `zh-Hant`, `es-419`), and a bare language gets its default region from the SDK's `DEFAULT_REGIONS` (de→de-DE, en→en-US, fr→fr-FR, it→it-IT, pt→pt-PT, zh→zh-CN, …; the same table in every Supertext plugin). Unknown bare codes are sent unchanged, so Supertext's error names them. The status screen shows this code per locale.
+- `sourceCode(code)` takes the language of the source locale's code (`de-CH` → `de`) with `LanguageCodes.source()`.
 
 The stand-in (`tests/docs/stand-in.mjs`) rejects bare targets and regional sources like the real API.
 
@@ -113,7 +128,7 @@ The stand-in (`tests/docs/stand-in.mjs`) answers like the Supertext API: texts f
 
 ## Tests
 
-- `npm test`: unit tests for the client (auth header, prefix stripping, 429 retries, polling, errors), the HTML document (rich text units, round trip of formatting and links), the field rules and the UI strings (every language has the same keys, placeholders and URLs as English).
+- `npm test`: unit tests for the text units (rich text split into paragraphs, formatting and links kept), the field rules and the translation through a fake client, the vendored SDK (it loads, sends the auth header, the language codes and deletes the file) and the UI strings (every language has the same keys, placeholders and URLs as English). The SDK's own tests and conformance scenarios run in the SDK repository.
 - `tests/demo-check.sh` (CI): builds on the demo image, starts it twice against PostgreSQL and the stand-in, checks the demo accounts (created once, never duplicated, no password in the log), runs `check`, translates the sample page and article with the `translate` task into de/fr/it, checks that a second run skips existing locales, and reads the German page and Italian article back through Apostrophe's REST API as the editor.
 
 ```bash
@@ -164,6 +179,8 @@ Railway settings (set on the service; `railway.json` is ignored): Dockerfile pat
 ## Dependency updates
 
 Dependabot (`.github/dependabot.yml`) opens weekly pull requests: minor and patch updates grouped into one, GitHub Actions in another, each major update on its own. Merge one when CI is green and it doesn't change what the plugin supports.
+
+`vendor/supertext-sdk` isn't watched by Dependabot: update it with `npm run sync-sdk` (see *Supertext SDK*).
 
 Some major versions are ignored on purpose: TypeScript (7.x is the native compiler, which the type-checking and build tools here don't support yet) and `@types/node` (the types must match the oldest Node version the plugin supports, not the newest). Lift an ignore rule when the plugin moves to the new version.
 

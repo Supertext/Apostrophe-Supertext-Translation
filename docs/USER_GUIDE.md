@@ -62,10 +62,10 @@ Unpublished changes you made in the translated draft are lost; the published ver
 
 | Message | Meaning |
 | --- | --- |
-| *Supertext could not translate "…" into …: Authentication failed. Please check the Supertext API key.* | The site's Supertext API key is wrong or missing. Ask your administrator. |
+| *Supertext could not translate "…" into …: Supertext rejected the API key. Please check it.* | The site's Supertext API key is wrong or missing. Ask your administrator. |
 | *… Too many requests to Supertext. Please try again shortly.* | Supertext is busy with your account's requests. Wait a moment and localize again, into fewer languages at once. |
-| *… Your Supertext translation limit is exceeded.* | The Supertext account's quota is used up. Ask your administrator. |
-| *… Timed out waiting for the Supertext translation.* | The document is very long. Try again later or ask your administrator to raise the time limit. |
+| *… Your Supertext translation limit is used up.* | The Supertext account's quota is used up. Ask your administrator. |
+| *… Timed out waiting for the Supertext translation to finish.* | The document is very long. Try again later or ask your administrator to raise the time limit. |
 | *… Could not reach Supertext* | The site can't connect to Supertext right now. Try again later. |
 | No *Translate text content* option in the wizard | The module isn't set up (no API key). Ask your administrator. |
 

@@ -169,11 +169,11 @@ node app supertext-apostrophe-translation:translate --slug=handmade-in-bern --ty
 | Symptom | Cause and fix |
 | --- | --- |
 | *Translate text content* doesn't appear in *Localize…* | No API key: set `SUPERTEXT_API_KEY` and restart. The startup log says `[supertext] No Supertext API key`. Also check that the assets were rebuilt after installing. |
-| *Authentication failed. Please check the Supertext API key.* | The key is wrong or was revoked. No Supertext account yet? Create one at <https://www.supertext.com/person/en/account/signin>. Generate your API key at supertext.com → Integrations → API (requires the Admin role): <https://www.supertext.com/en/integrations/api>. |
+| *Supertext rejected the API key. Please check it.* | The key is wrong or was revoked. No Supertext account yet? Create one at <https://www.supertext.com/person/en/account/signin>. Generate your API key at supertext.com → Integrations → API (requires the Admin role): <https://www.supertext.com/en/integrations/api>. |
 | *Too many requests* | Supertext limits requests per second. The module retries automatically up to four times; if it still fails, localize into fewer locales at once. |
-| *Timed out waiting for the Supertext translation.* | Very long documents. Raise `timeout`. |
-| *Your Supertext translation limit is exceeded.* | The account's quota is used up: upgrade the subscription at supertext.com. |
-| *Could not reach Supertext: …* | The server can't reach `api.supertext.com` (firewall, proxy, DNS). |
+| *Timed out waiting for the Supertext translation to finish.* | Very long documents. Raise `timeout`. |
+| *Your Supertext translation limit is used up.* | The account's quota is used up: upgrade the subscription at supertext.com. |
+| *Could not reach Supertext. Details: …* | The server can't reach `api.supertext.com` (firewall, proxy, DNS). |
 | Some texts stay in the source language | The field type isn't translated (see the user guide) or the widget type is in `skipWidgets`. The log names texts Supertext returned nothing for. |
 | The admin bar shows `supertext:menuLabel` instead of *Supertext* | The UI assets are out of date: rebuild them and restart. |
 

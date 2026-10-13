@@ -118,6 +118,7 @@ Lessons from testing against the live API (October 2026), to apply in every plug
 
 - Before committing: `npm test` (unit tests, no Apostrophe needed). CI also builds the demo image and runs `tests/demo-check.sh` against PostgreSQL and the stand-in (`tests/docs/stand-in.mjs`).
 - The module is `index.js` (provider, status screen, API routes, tasks). Keep `lib/` free of Apostrophe imports.
+- All Supertext API calls go through the Supertext SDK (`supertext-sdk`, TypeScript), vendored in `vendor/supertext-sdk` and loaded by `lib/sdk.js`. Never edit `vendor/`: fix the SDK in `Supertext/Supertext-API-SDK-and-Guide` and run `npm run sync-sdk`. Once the SDK is on npm it becomes a normal dependency.
 - New options go in `index.js` (`options`) **and** the settings table in `docs/INSTALLATION.md`.
 - Field rules live in `lib/collect.js`; keep "Field rules" in `docs/DEVELOPER.md` and "What is translated" in `docs/USER_GUIDE.md` in sync.
 - UI strings: `i18n/supertext/{en,de,fr,it}.json` (and `i18n/apostrophe/*.json` for the wizard's disclaimer); `test/i18n.test.js` checks they match. Module i18n goes in the top-level `i18n` property, not in `options`.

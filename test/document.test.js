@@ -1,15 +1,16 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { textUnit, richTextUnits, buildDocument, parseDocument, chunks } = require('../lib/document');
+const { textUnit, richTextUnits } = require('../lib/document');
 
 test('plain text keeps surrounding whitespace and line breaks', () => {
   let out;
   const unit = textUnit('  Line one\nLine <two> & more ', (v) => {
     out = v;
   }, 'summary');
-  assert.equal(unit.html, 'Line one<br>Line &lt;two&gt; &amp; more');
-  assert.equal(unit.apply('Zeile eins<br>Zeile &lt;zwei&gt; &amp; mehr'), true);
+  assert.equal(unit.text, 'Line one\nLine <two> & more');
+  assert.equal(unit.html, false);
+  assert.equal(unit.apply('Zeile eins\nZeile <zwei> & mehr'), true);
   assert.equal(out, '  Zeile eins\nZeile <zwei> & mehr ');
   assert.equal(textUnit('   ', () => {}, 'x'), null);
 });
@@ -20,7 +21,8 @@ test('rich text: one unit per paragraph, heading and list item', () => {
   const units = richTextUnits(html, (v) => {
     out = v;
   }, 'main');
-  assert.deepEqual(units.map((u) => u.html), [ 'Title', 'Made in <strong>Bern</strong>, see <a href="https://x.ch">site</a>.', 'One', 'Two' ]);
+  assert.ok(units.every((u) => u.html === true));
+  assert.deepEqual(units.map((u) => u.text), [ 'Title', 'Made in <strong>Bern</strong>, see <a href="https://x.ch">site</a>.', 'One', 'Two' ]);
   units[0].apply('Titel');
   units[1].apply('Hergestellt in <strong>Bern</strong>, siehe <a href="https://x.ch">Website</a>.');
   units[2].apply('Eins');
@@ -36,14 +38,4 @@ test('rich text with loose text is one unit', () => {
   assert.equal(units.length, 1);
   units[0].apply('Hallo <b>Welt</b>');
   assert.equal(out, 'Hallo <b>Welt</b>');
-});
-
-test('document round trip and chunks', () => {
-  const units = [ { html: 'A' }, { html: 'B &amp; C' } ];
-  const doc = buildDocument(units);
-  assert.match(doc, /<div data-st-id="1">B &amp; C<\/div>/);
-  const back = parseDocument(doc.replace('>A<', '>Ä<'));
-  assert.equal(back.get(0), 'Ä');
-  assert.equal(back.get(1), 'B &amp; C');
-  assert.equal(chunks([ { html: 'x'.repeat(60) }, { html: 'y'.repeat(60) } ], 120).length, 2);
 });
