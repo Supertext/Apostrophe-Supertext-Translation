@@ -174,7 +174,7 @@ Railway settings (set on the service; `railway.json` is ignored): Dockerfile pat
 
 ## CI
 
-`.github/workflows/ci.yml`: unit tests on Node 22 and 24; then builds the demo image and runs `tests/demo-check.sh` against a PostgreSQL service and the stand-in.
+`.github/workflows/ci.yml`: unit tests on Node 22, 24 and 26; then builds the demo image and runs `tests/demo-check.sh` against a PostgreSQL service and the stand-in.
 
 ## Dependency updates
 

@@ -15,6 +15,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - Tasks `supertext-apostrophe-translation:check` and `supertext-apostrophe-translation:translate`.
 - Interface in English, German, French and Italian.
 - Retries when Supertext's per-second rate limit is hit; the API key works with or without the `Supertext-Auth-Key ` prefix.
+- Tested on Node.js 26 as well (CI runs the unit tests on Node 22, 24 and 26).
 
 ### Changed
 
