@@ -16,7 +16,8 @@ start() {
 	docker rm -f demo >/dev/null 2>&1 || true
 	docker run -d --name demo --network host -e PORT=$PORT -e DATABASE_URL -e APOS_SESSION_SECRET \
 		-e DEMO_ADMIN_EMAIL -e DEMO_ADMIN_PASSWORD -e DEMO_EDITOR_EMAIL -e DEMO_EDITOR_PASSWORD \
-		-e SUPERTEXT_API_KEY=anything -e SUPERTEXT_API_URL=http://127.0.0.1:8765/v1/ supertext-apostrophe-demo >/dev/null
+		-e SUPERTEXT_API_KEY=anything -e SUPERTEXT_API_URL=http://127.0.0.1:8765/v1/ \
+		-e SUPERTEXT_REPORT_URL=http://127.0.0.1:8765/report -e APOS_BASE_URL=$B supertext-apostrophe-demo >/dev/null
 	for _ in $(seq 120); do curl -sf -o /dev/null "$B/health" && break; sleep 2; done
 	curl -sf -o /dev/null "$B/health"
 	docker logs demo 2>&1 | grep '\[demo\]' || true
@@ -32,6 +33,19 @@ echo "accounts OK"
 out=$(app supertext-apostrophe-translation:check)
 echo "$out"
 grep -qF 'The API key works' <<< "$out"
+grep -qF 'Version report: sent' <<< "$out"
+grep -qF 'Locale de: de-CH (politeness more)' <<< "$out"
+
+# Commando Center: the public ping (no login) and the reports the stand-in received.
+ping=$(curl -sf -D - "$B/api/v1/supertext-apostrophe-translation/ping?challenge=ci-challenge-0123456789")
+grep -qi '^cache-control: no-store' <<< "$ping"
+grep -qF '{"ok":true,"plugin":"Apostrophe-Supertext-Translation","challenge":"ci-challenge-0123456789"}' <<< "$ping"
+test "$(curl -s -o /dev/null -w '%{http_code}' "$B/api/v1/supertext-apostrophe-translation/ping?challenge=bad")" = 400
+reports=$(curl -sf http://127.0.0.1:8765/reports)
+grep -qE '"event":"(installed|check)"' <<< "$reports"
+grep -qF "\"callback\":{\"url\":\"$B/api/v1/supertext-apostrophe-translation/ping\"}" <<< "$reports"
+if grep -qF 'anything' <<< "$reports"; then echo "The API key appeared in a report"; exit 1; fi
+echo "Commando Center OK"
 out=$(app supertext-apostrophe-translation:translate --slug=/swiss-chocolate)
 out+=$'\n'$(app supertext-apostrophe-translation:translate --slug=handmade-in-bern --type=article)
 echo "$out"

@@ -19,9 +19,14 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
-- The connection to Supertext now uses the shared [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (TypeScript SDK 0.1.0, shipped with the module in `vendor/supertext-sdk`, so nothing else needs installing). Translation works as before; some error messages are worded differently (e.g. *Supertext rejected the API key. Please check it.*), the file at Supertext is also deleted after errors, and `check` shows the SDK version.
+- The connection to Supertext now uses the shared [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (TypeScript SDK 0.2.1, shipped with the module in `vendor/supertext-sdk`, so nothing else needs installing; its API is in the `v1` folder). The file at Supertext is also deleted after errors, and `check` shows the SDK version.
+- **Language codes are no longer guessed.** Each locale's Supertext language comes from the `languages` option (`code`, used as target and, without region, as source), else from the locale name if it is exactly a Supertext code (`es`, `nl`, `de-CH`), else the locale is unsupported and nothing is sent. There are no default regions any more: locales such as `de`, `fr`, `it`, `en` or `pt` need a `code` (e.g. `de: { code: 'de-CH' }`). The *Localize…* wizard says automatic translation isn't available for unsupported locales, and the editor gets *The locale … has no Supertext language* naming where to map it. `languages` also takes the short form `{ de: 'de-CH' }`.
+- The form of address (`politeness`) is only sent for languages where Supertext offers it (not for English, for example); the status screen says when it is ignored.
+- Error messages for editors are now in their interface language (English, German, French, Italian) for every Supertext error, including the new *unsupported language* and *unsupported form of address*.
 
-### Fixed
+### Added (Commando Center)
 
-- Target languages without a region (e.g. the locale `de` without a `languages` code) are now sent to Supertext as `de-DE` (`fr` → `fr-FR`, `en` → `en-US`, …); Supertext rejected them with `INVALID_LANGUAGE_PAIR`. Regional codes are normalized (`de-ch` → `de-CH`).
-- Locale names with a variant, such as `de_DE_formal` or `en-US-x-twain`, are sent to Supertext as `de-DE` and `en-US` (bundled SDK updated to commit `aba02dd`).
+- **Send version information to Supertext** (option `versionReports`, on by default; `SUPERTEXT_VERSION_REPORTS=0` turns it off): the site URL and the versions of the module, ApostropheCMS and Node.js go to Supertext after an update and when the API key changes. No content, no API key, no personal data.
+- **Automatic API key check** (free, nothing translated): when the key changes, on *Test connection* and when Supertext rejects a translation. The status screen shows the last result with its time, the account and API key links where they help, the ping address and whether version information is sent.
+- Public ping address `GET /api/v1/supertext-apostrophe-translation/ping` (only while version reports are on), so Supertext can see whether the site is reachable.
+- The status screen and `check` show per locale whether it has a Supertext language (and mark codes Supertext doesn't list); `check` also sends a version report.

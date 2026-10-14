@@ -67,7 +67,7 @@ Then rebuild the assets and restart. The version is shown on the Supertext statu
 
 ## Uninstall
 
-Remove `'supertext-apostrophe-translation'` from `app.js`, run `npm uninstall supertext-apostrophe-translation`, rebuild the assets and restart. The module stores nothing in your database: localized documents it translated stay as they are.
+Remove `'supertext-apostrophe-translation'` from `app.js`, run `npm uninstall supertext-apostrophe-translation`, rebuild the assets and restart. Localized documents it translated stay as they are. The only thing the module stores is the state of its version reports and API key check: one entry in Apostrophe's cache collection (`aposCache`, namespace `supertext-apostrophe-translation`, key `reporter`). To remove it too: `db.aposCache.deleteOne({ namespace: 'supertext-apostrophe-translation', key: 'reporter' })` (MongoDB) or delete that row.
 
 ## API key
 
@@ -103,22 +103,31 @@ export default {
 };
 ```
 
-By default the locale name is turned into the Supertext language:
+Every locale needs a **Supertext language**, set with the module option `languages`. The module never guesses a code: it uses
 
-- **Target languages** are always sent with a region, because Supertext rejects bare targets: a locale with a region keeps it (`pt_BR` → `pt-BR`); a bare one gets the usual default (`de` → `de-DE`, `fr` → `fr-FR`, `it` → `it-IT`, `en` → `en-US`, `pt` → `pt-PT`, `zh` → `zh-CN`, …).
-- **The source language** is sent without region (`de-CH` → `de`), because Supertext rejects regional source codes.
+1. the locale's `code` in `languages` (one code per locale, used both when the locale is the target and when it is the source; as source, only its language is sent: `de-CH` → `de`), else
+2. the locale name, if it is exactly one of Supertext's codes (case and `_`/`-` don't matter: `de_ch` = `de-CH`), else
+3. nothing: the locale is **unsupported**. Apostrophe's *Localize…* wizard then says automatic translation isn't available for it, and nothing is sent to Supertext.
 
-Use the `languages` option to send another regional variant (it wins over the default; for the source, its language is used) or to choose the form of address:
+Supertext's codes: target languages are regional only for German, English, French, Italian and Portuguese (`de-CH`, `de-DE`, `en-GB`, `en-US`, `fr-CH`, `fr-FR`, `it-CH`, `it-IT`, `pt-BR`, `pt-PT`), with a script for Chinese and Serbian (`zh-Hans`, `zh-Hant`, `sr-Latn`, `sr-Cyrl`), `gsw-u-sd-chzh` / `gsw-u-sd-chbe` for Swiss German dialects, and bare for all others (`es`, `nl`, `sl`, `ja`, …). Source languages are bare (`en`, `de`). So the usual locales `de`, `fr`, `it`, `en` and `pt` need a mapping; `es` or `nl` work as they are.
 
 ```js
-languages: {
-  de: { code: 'de-CH', politeness: 'more' },   // Swiss German, formal (Sie)
-  fr: { code: 'fr-CH', politeness: 'more' },   // Swiss French, formal (vous)
-  'en-us': { code: 'en-US' }
+// app.js
+'supertext-apostrophe-translation': {
+  options: {
+    languages: {
+      en: { code: 'en-GB' },                       // British English as target
+      de: { code: 'de-CH', politeness: 'more' },   // Swiss German, formal (Sie)
+      fr: { code: 'fr-CH', politeness: 'more' },   // Swiss French, formal (vous)
+      it: 'it-CH'                                  // short form: just the code
+    }
+  }
 }
 ```
 
-The Supertext status screen lists every locale with the Supertext language and form of address it uses. Editors pick locales in the *Localize…* wizard:
+`politeness` is `more` (formal), `less` (informal) or left out (Supertext's default). It is only sent for languages where Supertext offers formal and informal address (e.g. German, French, Italian, Spanish, Dutch); for others (e.g. English) it is ignored, and the status screen says so.
+
+The Supertext status screen lists every locale with the Supertext language and form of address it uses, and marks locales without a Supertext language (*No Supertext language*, or *Source only* for a locale like `en` that works as source but needs a code to be translated into) and codes that aren't in Supertext's list. The `check` task prints the same per locale. Editors pick locales in the *Localize…* wizard:
 
 ![The locale menu in Apostrophe's admin bar, listing English, Deutsch, Français and Italiano, each marked as existing for the current page](images/locales.png)
 
@@ -131,7 +140,8 @@ All settings are options of the `supertext-apostrophe-translation` module in `ap
 | `apiKey` | `''` | Supertext API key. The environment variable `SUPERTEXT_API_KEY` takes precedence. |
 | `environment` | `'live'` | Supertext API environment: `live` (`https://api.supertext.com/v1/`), `staging` or `testing`. |
 | `apiUrl` | `''` | Custom API address (overrides `environment`). The environment variable `SUPERTEXT_API_URL` takes precedence. Only for tests against a stand-in. |
-| `languages` | `{}` | Per locale: `{ code, politeness }`. `code` is the Supertext language with region (e.g. `de-CH`; without it, bare locales get a default region: `de` → `de-DE`); `politeness` is `more` (formal), `less` (informal) or left out (Supertext's default). |
+| `languages` | `{}` | The language mapping, per locale: `{ code, politeness }` or just the code (`'de-CH'`). `code` is the Supertext language (used as target and, without region, as source); without it the locale name must be exactly a Supertext code, otherwise the locale is unsupported (see [Languages](#languages)). `politeness` is `more` (formal), `less` (informal) or left out (Supertext's default); only sent where Supertext offers it. |
+| `versionReports` | `true` | *Send version information to Supertext* (see [Version reports](#version-reports-commando-center)). The environment variable `SUPERTEXT_VERSION_REPORTS=0` turns it off (and `=1` on), whatever the option says. |
 | `translateSlugs` | `true` | New localizations get a slug made from the translated title (`/swiss-chocolate` → `/de/schweizer-schokolade…`). Re-translating keeps the slug the localized document already has. Set to `false` to keep Apostrophe's default (the source slug). |
 | `skipWidgets` | `['@apostrophecms/html']` | Widget types that are never translated. |
 | `timeout` | `180` | Seconds to wait for one translation before giving up. |
@@ -141,9 +151,41 @@ To keep a field of your own schema out of translation, add `translate: false` to
 
 ### Status screen
 
-Administrators (users who may edit users, i.e. the *admin* role) see **Supertext** in the admin bar. It shows the module version (linked to its release notes), where the API key comes from, the API address, whether automatic translation is active in *Localize…*, the account and API key links, a **Test connection** button and the language table:
+Administrators (users who may edit users, i.e. the *admin* role) see **Supertext** in the admin bar. It shows the module version (linked to its release notes), where the API key comes from, the API address, whether automatic translation is active in *Localize…*, the result of the last **API key check** with its time, whether version information is sent to Supertext, the ping address, the account and API key links, a **Test connection** button and the language table (Supertext language and form of address per locale, unmapped locales marked):
 
-![The Supertext status screen: version 0.1.0, API key set from the environment variable, API address https://api.supertext.com/v1/, automatic translation on, a successful connection test and the language table with de-CH, fr-CH and it-CH in formal address](images/status.png)
+![The Supertext status screen: version 0.1.0, API key set from the environment variable, API address https://api.supertext.com/v1/, automatic translation on, API key check "the connection to Supertext works" with its time, version information on with its explanation, the ping address, a successful connection test and the language table with en-GB, de-CH, fr-CH and it-CH, the last three in formal address](images/status.png)
+
+### API key check
+
+The module checks the API key automatically, free of charge (Supertext's `GET features`, nothing is translated or billed): on the first back-end request after a start with a new or changed key (status screen, translation, task; the key is compared by a SHA-256 fingerprint kept locally), when you click **Test connection**, and when Supertext rejects a translation with 401/403. The status screen shows the last result:
+
+| Result | Message |
+| --- | --- |
+| ok | API key checked: the connection to Supertext works. |
+| invalid | Supertext rejected the API key. Check that you copied the whole key, or generate a new one at supertext.com → Integrations → API (requires the Admin role). No Supertext account yet? Create one at supertext.com. |
+| missing | No API key is set yet. No Supertext account yet? Create one at supertext.com. Generate your API key at supertext.com → Integrations → API (requires the Admin role). |
+| unreachable | The API key couldn't be checked because Supertext can't be reached. The settings are saved; check again later. |
+| error | The API key couldn't be checked: Supertext answered with an error (HTTP …). The settings are saved; check again later. |
+
+On the status screen, *supertext.com* links to <https://www.supertext.com/person/en/account/signin> and *supertext.com → Integrations → API* to <https://www.supertext.com/en/integrations/api> (new tab).
+
+### Version reports (Commando Center)
+
+**Send version information to Supertext** (option `versionReports`, on by default): sends the site URL and the versions of this plugin, ApostropheCMS and the runtime to Supertext after an update and when the API key changes, so Supertext support can see which version you run. No content, no API key and no personal data are sent.
+
+What is sent, as JSON to Supertext's Commando Center (`https://commandocenter-production.up.railway.app/api/v1/report`):
+
+- the event (`installed` the first time, `upgraded` after a change of the module, Apostrophe or Node.js version, `api_key_check` when the key check result changed, `check` from the `check` task),
+- the site URL (Apostrophe's `baseUrl` / `APOS_BASE_URL` plus `prefix`, else the address of the request),
+- the plugin name `Apostrophe-Supertext-Translation` and its version, `ApostropheCMS` and its version, `Node.js` and its version, the bundled Supertext SDK version,
+- whether an API key is set and the last key check result (status, time, HTTP status, Supertext's error code), never the key,
+- the ping address (below).
+
+Reports go from the server only, on back-end requests (status screen, translations, tasks; never on page views), in the background with a 3-second timeout. A failed report never fails anything; the module then waits an hour before trying again.
+
+**Turn it off** with `versionReports: false` in the module options or `SUPERTEXT_VERSION_REPORTS=0` in the environment (the environment wins). Then nothing at all is sent and the ping address answers 404. The API key check still runs (it only talks to the Supertext API).
+
+**Ping address:** `GET <site URL>/api/v1/supertext-apostrophe-translation/ping?challenge=…` (shown on the status screen). Supertext calls it to see whether the site is reachable from the internet. It needs no login, isn't cached, and answers only `{"ok":true,"plugin":"Apostrophe-Supertext-Translation","challenge":"…"}` — no versions, settings or data. If a firewall or an authentication proxy protects the site, allow this path.
 
 ### Permissions
 
@@ -152,7 +194,7 @@ Translation follows Apostrophe's own permissions: whoever may localize a documen
 ## Command-line tasks
 
 ```bash
-# Version, API address and a free connection test
+# Version, API address, Supertext language per locale, a free connection test and a version report
 node app supertext-apostrophe-translation:check
 
 # Localize a page into all other locales and translate it (drafts)
@@ -162,6 +204,8 @@ node app supertext-apostrophe-translation:translate --slug=/about
 node app supertext-apostrophe-translation:translate --slug=handmade-in-bern --type=article --to=de,fr --overwrite
 ```
 
+`check` also stores the key check and sends a `check` version report (when version reports are on and `APOS_BASE_URL` is set, since a task has no request to take the site URL from).
+
 `translate` options: `--slug` (required), `--type` (for pieces), `--from` (source locale, default: the default locale), `--to` (comma-separated, default: all other locales), `--overwrite` (otherwise locales that already have the document are skipped).
 
 ## Troubleshooting
@@ -170,11 +214,18 @@ node app supertext-apostrophe-translation:translate --slug=handmade-in-bern --ty
 | --- | --- |
 | *Translate text content* doesn't appear in *Localize…* | No API key: set `SUPERTEXT_API_KEY` and restart. The startup log says `[supertext] No Supertext API key`. Also check that the assets were rebuilt after installing. |
 | *Supertext rejected the API key. Please check it.* | The key is wrong or was revoked. No Supertext account yet? Create one at <https://www.supertext.com/person/en/account/signin>. Generate your API key at supertext.com → Integrations → API (requires the Admin role): <https://www.supertext.com/en/integrations/api>. |
+| *The locale … has no Supertext language* (`unsupported_language`) | The locale has no `code` in `languages` and its name isn't exactly a Supertext code (e.g. `de`, which Supertext only accepts as `de-CH` or `de-DE`). Add it: `languages: { de: { code: 'de-CH' } }` and restart. The status screen marks such locales; the *Localize…* wizard says automatic translation isn't available for them. |
+| *Supertext offers no formal or informal address for …* (`unsupported_feature`) | Supertext refused the form of address for that language. Remove its `politeness` from `languages`. |
+| *Supertext doesn't translate this language pair* | The mapped code isn't a Supertext code (e.g. `es-ES` instead of `es`; the status screen says *Not in Supertext's list*). Fix the `code`. |
+| Status screen: *Supertext rejected the API key …* (key check *invalid*) | As for *Supertext rejected the API key. Please check it.* below; after fixing the key, restart and click **Test connection**. |
+| Status screen: *… because Supertext can't be reached* (key check *unreachable*) | The server can't reach `api.supertext.com`; translations will fail too. Check firewall, proxy and DNS, then **Test connection**. |
+| Status screen: *Supertext answered with an error (HTTP …)* | Supertext had a problem; try **Test connection** later. Contact support@supertext.com if it persists. |
+| Supertext support can't see your installation | Version reports are off, `APOS_BASE_URL` is a local address, or the server can't reach `commandocenter-production.up.railway.app`. Reports are retried after an hour. |
 | *Too many requests* | Supertext limits requests per second. The module retries automatically up to four times; if it still fails, localize into fewer locales at once. |
-| *Timed out waiting for the Supertext translation to finish.* | Very long documents. Raise `timeout`. |
-| *Your Supertext translation limit is used up.* | The account's quota is used up: upgrade the subscription at supertext.com. |
-| *Could not reach Supertext. Details: …* | The server can't reach `api.supertext.com` (firewall, proxy, DNS). |
+| *The translation took too long.* | Very long documents. Raise `timeout`. |
+| *Your Supertext translation quota is used up.* | The account's quota is used up: upgrade the subscription at supertext.com. |
+| *Supertext couldn't be reached: …* | The server can't reach `api.supertext.com` (firewall, proxy, DNS). |
 | Some texts stay in the source language | The field type isn't translated (see the user guide) or the widget type is in `skipWidgets`. The log names texts Supertext returned nothing for. |
 | The admin bar shows `supertext:menuLabel` instead of *Supertext* | The UI assets are out of date: rebuild them and restart. |
 
-Errors are logged with the prefix `[supertext]` and shown to the editor as a notification.
+Errors are logged in English with the prefix `[supertext]` and shown to the editor as a notification in their interface language (English, German, French or Italian).

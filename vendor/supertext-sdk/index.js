@@ -1,13 +1,10 @@
 /**
- * Supertext SDK: client for the Supertext AI file translation API v1.
+ * Supertext SDK. Everything that talks to the API is versioned with it:
  *
- * No Supertext account yet? Create one at https://www.supertext.com/person/en/account/signin.
- * Generate your API key at https://www.supertext.com/en/integrations/api
- * (supertext.com → Integrations → API; requires the Admin role).
+ *   import { v1 } from 'supertext-sdk'          // or: import { SupertextClient } from 'supertext-sdk/v1'
+ *   const client = new v1.SupertextClient(apiKey)
+ *
+ * A later API version gets `v2` next to `v1`.
  */
-export { SupertextClient, LIVE_BASE_URL } from './client.js';
-export { authHeader, retryDelayMs } from './auth.js';
-export { ErrorCode, SupertextError, errorForFileStatus, errorForStatus } from './errors.js';
-export { LanguageCodes, DEFAULT_REGIONS } from './language-codes.js';
-export { HtmlDocument } from './html-document.js';
-export { DEFAULT_MAX_CHARACTERS, planBatches } from './batching.js';
+export * as v1 from './v1/index.js';
+export { SDK_VERSION } from './version.js';

@@ -1,9 +1,14 @@
 {
   "name": "supertext-sdk",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "main": "./index.js",
   "types": "./index.d.ts",
+  "exports": {
+    ".": { "types": "./index.d.ts", "default": "./index.js" },
+    "./v1": { "types": "./v1/index.d.ts", "default": "./v1/index.js" },
+    "./package.json": "./package.json"
+  },
   "license": "MIT"
 }

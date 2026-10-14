@@ -8,7 +8,7 @@
  *   DEMO_ADMIN_EMAIL=… DEMO_ADMIN_PASSWORD=… npm run screenshots
  *
  * Writes docs/images/*.png at 1× scale, cropped to the relevant part. The status screen
- * shows the live API address instead of the stand-in's.
+ * shows the live API address instead of the stand-in's (and example.ch as ping address).
  */
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
@@ -110,10 +110,11 @@ await page.getByRole('button', { name: 'Supertext', exact: true }).first().click
 await page.locator('.supertext-status__body').waitFor({ timeout: 30000 })
 await page.locator('.supertext-test').click()
 await page.locator('.supertext-test-result').waitFor({ timeout: 30000 })
-// Show the live API address, not the stand-in's.
+// Show the live API address, not the stand-in's, and a public site instead of the local one.
 await page.evaluate(() => {
-  for (const el of document.querySelectorAll('.supertext-status__list code')) el.textContent = 'https://api.supertext.com/v1/'
+  for (const el of document.querySelectorAll('.supertext-api-url')) el.textContent = 'https://api.supertext.com/v1/'
+  for (const el of document.querySelectorAll('.supertext-ping-url')) el.textContent = 'https://www.example.ch/api/v1/supertext-apostrophe-translation/ping'
 })
-await shot(page, 'status.png', { x: 474, y: 0, width: 926, height: 640 })
+await shot(page, 'status.png', { x: 474, y: 0, width: 926, height: 820 })
 await page.close()
 await browser.close()

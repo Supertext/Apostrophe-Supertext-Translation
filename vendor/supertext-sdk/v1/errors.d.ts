@@ -8,6 +8,8 @@ export declare const ErrorCode: {
     readonly MissingApiKey: "missing_api_key";
     readonly AuthenticationFailure: "authentication_failure";
     readonly InvalidLanguagePair: "invalid_language_pair";
+    readonly UnsupportedLanguage: "unsupported_language";
+    readonly UnsupportedFeature: "unsupported_feature";
     readonly NotFound: "not_found";
     readonly PayloadTooLarge: "payload_too_large";
     readonly TooManyRequests: "too_many_requests";
@@ -32,6 +34,8 @@ export interface SupertextErrorDetails {
     /** For `invalid_language_pair`: the codes the API reports, when it does. */
     sourceLang?: string;
     targetLang?: string;
+    /** For `unsupported_feature`: the option the API names, e.g. `politeness`. */
+    feature?: string;
     cause?: unknown;
 }
 export declare class SupertextError extends Error {
@@ -41,6 +45,7 @@ export declare class SupertextError extends Error {
     readonly apiErrorCode?: string;
     readonly sourceLang?: string;
     readonly targetLang?: string;
+    readonly feature?: string;
     constructor(code: SupertextErrorCode, details?: SupertextErrorDetails);
 }
 /**

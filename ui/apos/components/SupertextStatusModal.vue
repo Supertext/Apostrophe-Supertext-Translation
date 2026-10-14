@@ -40,9 +40,45 @@
                 {{ keyText }}
               </dd>
               <dt>{{ $t('supertext:apiAddress') }}</dt>
-              <dd><code>{{ status.apiUrl }}</code></dd>
+              <dd><code class="supertext-api-url">{{ status.apiUrl }}</code></dd>
               <dt>{{ $t('supertext:automaticTranslation') }}</dt>
               <dd>{{ $t(status.providerActive ? 'supertext:on' : 'supertext:off') }}</dd>
+              <dt>{{ $t('supertext:keyCheck') }}</dt>
+              <dd class="supertext-key-check">
+                <template v-if="keyCheck">
+                  <span :class="keyCheck.status === 'ok' ? 'supertext-status__ok' : 'supertext-status__warn'">
+                    <template
+                      v-for="(part, i) in linkParts(keyCheck.message)"
+                      :key="i"
+                    >
+                      <a
+                        v-if="part.href"
+                        :href="part.href"
+                        target="_blank"
+                        rel="noopener"
+                      >{{ part.text }}</a>
+                      <template v-else>{{ part.text }}</template>
+                    </template>
+                  </span>
+                  <span
+                    v-if="keyCheck.checkedAt"
+                    class="supertext-status__muted supertext-status__block"
+                  >{{ $t('supertext:keyCheckAt', { time: formatTime(keyCheck.checkedAt) }) }}</span>
+                </template>
+                <span
+                  v-else
+                  class="supertext-status__muted"
+                >{{ $t('supertext:keyCheckNone') }}</span>
+              </dd>
+              <dt>{{ $t('supertext:versionReports') }}</dt>
+              <dd class="supertext-version-reports">
+                {{ $t(status.versionReports ? 'supertext:on' : 'supertext:versionReportsOff') }}
+                <span class="supertext-status__muted supertext-status__block">{{ $t('supertext:versionReportsHelp') }}</span>
+              </dd>
+              <template v-if="status.pingUrl">
+                <dt>{{ $t('supertext:pingUrl') }}</dt>
+                <dd><code class="supertext-ping-url">{{ status.pingUrl }}</code></dd>
+              </template>
             </dl>
             <p class="supertext-status__links">
               {{ $t('supertext:signupLead') }}
@@ -69,7 +105,20 @@
                 v-if="result"
                 class="supertext-test-result"
                 :class="result.ok ? 'supertext-status__ok' : 'supertext-status__warn'"
-              >{{ result.message }}</span>
+              >
+                <template
+                  v-for="(part, i) in linkParts(result.message)"
+                  :key="i"
+                >
+                  <a
+                    v-if="part.href"
+                    :href="part.href"
+                    target="_blank"
+                    rel="noopener"
+                  >{{ part.text }}</a>
+                  <template v-else>{{ part.text }}</template>
+                </template>
+              </span>
             </div>
             <h3 class="supertext-status__heading">
               {{ $t('supertext:languages') }}
@@ -88,11 +137,26 @@
                   :key="language.locale"
                 >
                   <td>{{ language.label }} <span class="supertext-status__muted">({{ language.locale }})</span></td>
-                  <td><code>{{ language.code }}</code></td>
-                  <td>{{ $t(addressKey(language.politeness)) }}</td>
+                  <td>
+                    <template v-if="language.code">
+                      <code>{{ language.code }}</code>
+                      <span
+                        v-if="!language.known"
+                        class="supertext-status__warn supertext-status__block"
+                      >{{ $t('supertext:notInList') }}</span>
+                    </template>
+                    <span
+                      v-else
+                      class="supertext-status__warn supertext-unmapped"
+                    >{{ $t(language.source ? 'supertext:sourceOnly' : 'supertext:notMapped') }}</span>
+                  </td>
+                  <td>{{ $t(language.politenessIgnored ? 'supertext:politenessNotOffered' : addressKey(language.politeness)) }}</td>
                 </tr>
               </tbody>
             </table>
+            <p class="supertext-status__muted supertext-status__help">
+              {{ $t('supertext:mappingHelp') }}
+            </p>
           </div>
           <p
             v-else-if="error"
@@ -125,6 +189,7 @@ export default {
         width: 'two-thirds'
       },
       status: null,
+      keyCheck: null,
       error: null,
       testing: false,
       result: null
@@ -148,6 +213,7 @@ export default {
     this.modal.active = true;
     try {
       this.status = await apos.http.get(`${this.action}/status`, { busy: true });
+      this.keyCheck = this.status.keyCheck;
     } catch (e) {
       this.error = e.body?.message || e.message || String(e);
     }
@@ -155,6 +221,28 @@ export default {
   methods: {
     close() {
       this.modal.showModal = false;
+    },
+    // Key-check messages name "supertext.com" and "supertext.com → Integrations → API"
+    // (untranslated in every language): link them, in a new tab.
+    linkParts(text) {
+      const links = {
+        'supertext.com → Integrations → API': this.status.apiKeyUrl,
+        'supertext.com': this.status.signupUrl
+      };
+      return String(text || '')
+        .split(/(supertext\.com → Integrations → API|supertext\.com(?![\w/-]|\.\w))/)
+        .filter((part) => part !== '')
+        .map((part) => ({
+          text: part,
+          href: links[part] || null
+        }));
+    },
+    formatTime(iso) {
+      try {
+        return new Date(iso).toLocaleString(document.documentElement.lang || undefined);
+      } catch (e) {
+        return iso;
+      }
     },
     addressKey(politeness) {
       if (politeness === 'more') {
@@ -170,6 +258,13 @@ export default {
       this.result = null;
       try {
         this.result = await apos.http.post(`${this.action}/test`, { body: {} });
+        if (this.result.checkedAt) {
+          this.keyCheck = {
+            status: this.result.status,
+            checkedAt: this.result.checkedAt,
+            message: this.result.message
+          };
+        }
       } catch (e) {
         this.result = {
           ok: false,
@@ -240,6 +335,16 @@ export default {
     border-bottom: 1px solid var(--a-base-9);
     text-align: left;
   }
+}
+
+.supertext-status__block {
+  display: block;
+  margin-top: 4px;
+}
+
+.supertext-status__help {
+  margin: 12px 0 0;
+  line-height: 1.5;
 }
 
 .supertext-status__muted {

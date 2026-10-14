@@ -12,7 +12,8 @@
 
 const { SupertextClient, SupertextError, SDK_VERSION, baseUrlFor, normalizeKey } = require('./lib/sdk');
 const { collectUnits } = require('./lib/collect');
-const { languageCode, politeness, translateUnits } = require('./lib/translate');
+const { languageStatus, translateUnits } = require('./lib/translate');
+const { Reporting, siteUrl, versionReportsEnabled } = require('./lib/reporting');
 const { version } = require('./package.json');
 
 const SIGNUP_URL = 'https://www.supertext.com/person/en/account/signin';
@@ -21,6 +22,17 @@ const RELEASES_URL = 'https://github.com/Supertext/Apostrophe-Supertext-Translat
 const KEY_HELP = `No Supertext account yet? Create one at ${SIGNUP_URL}. ` +
   `Generate your API key at supertext.com → Integrations → API (requires the Admin role): ${API_KEY_URL}`;
 const PROVIDER = 'supertext';
+// Where the Commando Center reporter keeps its state: Apostrophe's cache collection
+// (`aposCache`), stored without expiry.
+const STATE_NAMESPACE = 'supertext-apostrophe-translation';
+const STATE_KEY = 'reporter';
+// SDK error codes with their own message (i18n/supertext: `error_<code>`); others show the SDK's text.
+const ERROR_CODES = [
+  'missing_api_key', 'authentication_failure', 'invalid_language_pair', 'unsupported_language',
+  'unsupported_feature', 'not_found', 'payload_too_large', 'too_many_requests', 'service_unavailable',
+  'unexpected_status', 'transport_error', 'no_file_id', 'translation_error', 'quota_exceeded',
+  'file_deleted', 'timeout', 'incomplete_response'
+];
 const ADMIN_PERMISSION = {
   action: 'edit',
   type: '@apostrophecms/user'
@@ -40,8 +52,12 @@ module.exports = {
     timeout: 180,
     // Seconds between status checks.
     pollInterval: 2,
-    // Per locale: { code: 'de-CH', politeness: 'more' | 'less' }
+    // Per locale: { code: 'de-CH', politeness: 'more' | 'less' }. The Supertext language of
+    // each locale (one mapping for both directions); without a code the locale name must be
+    // exactly one of Supertext's codes.
     languages: {},
+    // "Send version information to Supertext" (Commando Center); SUPERTEXT_VERSION_REPORTS=0 wins.
+    versionReports: true,
     // New localizations get a slug made from the translated title.
     translateSlugs: true,
     // Widget types that are never translated.
@@ -98,6 +114,89 @@ module.exports = {
         });
       },
 
+      // Commando Center glue (lib/reporting.js): one per process.
+      reporting() {
+        if (!self.reportingInstance) {
+          self.reportingInstance = new Reporting({
+            storage: {
+              get: () => self.apos.cache.get(STATE_NAMESPACE, STATE_KEY),
+              set: (value) => self.apos.cache.set(STATE_NAMESPACE, STATE_KEY, value)
+            },
+            settings: () => ({
+              apiKey: self.apiKey(),
+              apiUrl: self.baseUrl(),
+              versionReports: self.options.versionReports
+            }),
+            pluginVersion: () => self.version,
+            systemVersion: () => self.apostropheVersion(),
+            actionPath: () => self.action,
+            userAgent: `supertext-apostrophe-translation/${self.version}`,
+            logger: { debug: (message) => (self.apos.util.debug ? self.apos.util.debug(message) : null) }
+          });
+        }
+        return self.reportingInstance;
+      },
+
+      versionReports() {
+        return versionReportsEnabled(self.options.versionReports);
+      },
+
+      apostropheVersion() {
+        try {
+          return require('apostrophe/package.json').version;
+        } catch (e) {
+          return null;
+        }
+      },
+
+      // The site's base URL: Apostrophe's baseUrl (APOS_BASE_URL), else the request's origin;
+      // plus Apostrophe's prefix. Null without either (e.g. a task without APOS_BASE_URL).
+      siteUrl(req) {
+        let origin = null;
+        try {
+          if (req && typeof req.get === 'function' && req.get('host')) {
+            origin = `${req.protocol || 'http'}://${req.get('host')}`;
+          }
+        } catch (e) {
+          origin = null;
+        }
+        return siteUrl(self.apos.baseUrl, self.apos.prefix, origin);
+      },
+
+      // Back-end requests that run the module's code: report an update or a changed key in
+      // the background (never on front-end page views; never fails the request).
+      reportInBackground(req, action = 'onRequest', httpStatus) {
+        try {
+          self.reporting().inBackground(action, self.siteUrl(req), httpStatus);
+        } catch (e) {
+          // Reporting never breaks a request.
+        }
+      },
+
+      // The key-check message (Commando Center wording) for a stored check.
+      keyCheckMessage(req, check) {
+        if (!check) {
+          return null;
+        }
+        return req.t(`supertext:keyCheck_${check.status}`, {
+          status: check.httpStatus ? `HTTP ${check.httpStatus}` : (check.errorCode || check.status)
+        });
+      },
+
+      // An SDK error in the editor's language; `locale` / `sourceLocale` name the Apostrophe
+      // locales. Other errors keep their own message.
+      errorMessage(req, e, { locale = '', sourceLocale = '' } = {}) {
+        if (!(e instanceof SupertextError) || !ERROR_CODES.includes(e.code)) {
+          return e && e.message ? e.message : String(e);
+        }
+        const unsupportedSource = e.code === 'unsupported_language' && e.sourceLang && !e.targetLang;
+        return req.t(`supertext:error_${e.code}`, {
+          locale: unsupportedSource ? sourceLocale : locale,
+          detail: e.detail || e.apiErrorCode || '',
+          status: e.status || ''
+        });
+      },
+
       releaseUrl() {
         return /^\d+\.\d+\.\d+$/.test(self.version) ? `${RELEASES_URL}v${self.version}` : null;
       },
@@ -141,14 +240,21 @@ module.exports = {
         if (!units.length) {
           return;
         }
+        self.reportInBackground(req);
         let missing;
         try {
           missing = await translateUnits(self.client(), units, source, target, self.options.languages);
         } catch (e) {
-          const message = e instanceof SupertextError && e.code === 'authentication_failure'
-            ? `${e.message} ${KEY_HELP}`
-            : e.message;
-          self.apos.util.error(`[supertext] ${draft.title || draft._id} (${source} → ${target}): ${message}`);
+          const auth = e instanceof SupertextError && e.code === 'authentication_failure';
+          if (auth) {
+            self.reportInBackground(req, 'authenticationFailed', e.status);
+          }
+          // English for the log, the editor's language for the notification.
+          self.apos.util.error(`[supertext] ${draft.title || draft._id} (${source} → ${target}): ${e.message}${auth ? ` ${KEY_HELP}` : ''}`);
+          const message = self.errorMessage(req, e, {
+            locale: `${self.localeLabel(req, target)} (${target})`,
+            sourceLocale: `${self.localeLabel(req, source)} (${source})`
+          });
           await self.apos.notify(req, 'supertext:translationFailed', {
             type: 'danger',
             dismiss: true,
@@ -202,21 +308,27 @@ module.exports = {
         }
       },
 
-      // Translation provider interface: Supertext translates between all the site's
-      // locales (codes are mapped with the `languages` option).
+      // Translation provider interface: a locale is supported when it has a Supertext code
+      // (the `languages` option, else an exact match). Apostrophe's wizard names the others.
       async getSupportedLanguages(req, { source, target } = {}) {
         const all = Object.keys(self.apos.i18n.locales);
-        const list = (codes) => (codes || all).map((code) => ({
-          code,
-          supported: true
-        }));
+        const list = (codes, direction) => (codes || all).map((code) => {
+          const status = languageStatus(code, self.options.languages);
+          return {
+            code,
+            supported: direction === 'source' ? Boolean(status.source) : status.supported
+          };
+        });
         return {
-          source: list(source),
-          target: list(target)
+          source: list(source, 'source'),
+          target: list(target, 'target')
         };
       },
 
-      status(req) {
+      async status(req) {
+        const reporting = self.reporting();
+        const url = self.siteUrl(req);
+        const check = await reporting.lastCheck();
         return {
           version: self.version,
           releaseUrl: self.releaseUrl(),
@@ -226,11 +338,18 @@ module.exports = {
           providerActive: self.apos.translation.providers.some((p) => p.name === PROVIDER),
           signupUrl: SIGNUP_URL,
           apiKeyUrl: API_KEY_URL,
+          versionReports: self.versionReports(),
+          pingUrl: self.versionReports() ? reporting.callbackUrl(url) : null,
+          keyCheck: check
+            ? {
+              status: check.status,
+              checkedAt: check.checkedAt,
+              message: self.keyCheckMessage(req, check)
+            }
+            : null,
           languages: Object.entries(self.apos.i18n.locales).map(([ locale, options ]) => ({
-            locale,
-            label: options.label ? req.t(options.label) : locale,
-            code: languageCode(locale, self.options.languages),
-            politeness: politeness(locale, self.options.languages)
+            ...languageStatus(locale, self.options.languages),
+            label: options.label ? req.t(options.label) : locale
           }))
         };
       },
@@ -249,6 +368,7 @@ module.exports = {
           if (!self.apos.permission.can(req, ADMIN_PERMISSION.action, ADMIN_PERMISSION.type)) {
             throw self.apos.error('forbidden');
           }
+          self.reportInBackground(req);
           return self.status(req);
         }
       },
@@ -259,24 +379,51 @@ module.exports = {
           if (!self.apos.permission.can(req, ADMIN_PERMISSION.action, ADMIN_PERMISSION.type)) {
             throw self.apos.error('forbidden');
           }
-          if (!self.apiKey()) {
+          // The SDK's key check (free: GET features); stored and reported when it changed.
+          const result = await self.reporting().run('testConnection', self.siteUrl(req));
+          const check = result && result.check;
+          if (!check) {
             return {
               ok: false,
-              message: req.t('supertext:noApiKey')
+              status: 'error',
+              message: req.t('supertext:keyCheck_error', { status: '?' })
             };
           }
+          return {
+            ok: check.status === 'ok',
+            status: check.status,
+            checkedAt: check.checkedAt,
+            message: self.keyCheckMessage(req, check)
+          };
+        }
+      }
+    };
+  },
+
+  routes(self) {
+    return {
+      get: {
+        // GET /api/v1/supertext-apostrophe-translation/ping?challenge=… : the Commando
+        // Center's reachability check. Public (no login, session or CSRF token), never cached,
+        // answers only while version reports are on (404 otherwise). Body and headers come
+        // from the SDK's pingResponse: nothing but the plugin name and a valid challenge.
+        ping(req, res) {
+          let answer;
           try {
-            await self.client().validateApiKey();
-            return {
-              ok: true,
-              message: req.t('supertext:connected')
-            };
+            answer = self.reporting().ping(req.query && req.query.challenge);
           } catch (e) {
-            return {
-              ok: false,
-              message: e.message
+            answer = {
+              status: 404,
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store'
+              },
+              body: '{"ok":false}'
             };
           }
+          res.status(answer.status);
+          res.set(answer.headers);
+          res.send(answer.body);
         }
       }
     };
@@ -291,19 +438,43 @@ module.exports = {
           console.log(`Supertext Translation for Apostrophe ${self.version}${release ? ` (${release})` : ''}`);
           console.log(`API address: ${self.baseUrl()}`);
           console.log(`Supertext SDK: ${SDK_VERSION}`);
+          for (const [ locale ] of Object.entries(self.apos.i18n.locales)) {
+            const language = languageStatus(locale, self.options.languages);
+            console.log(`Locale ${locale}: ${language.code
+              ? `${language.code}${language.politeness !== 'default' ? ` (politeness ${language.politeness})` : ''}${language.known ? '' : ' (not in Supertext\'s list)'}`
+              : language.source
+                ? `source only (${language.source}); to translate into it, map it with the module option languages`
+                : 'no Supertext language: map it with the module option languages'}`);
+          }
+          const url = self.siteUrl(null);
           if (!self.apiKey()) {
             console.log('No API key. Set the SUPERTEXT_API_KEY environment variable.');
             console.log(KEY_HELP);
             process.exitCode = 1;
+          } else {
+            try {
+              await self.client().validateApiKey();
+              console.log('Connected. The API key works.');
+            } catch (e) {
+              console.log(e.code === 'authentication_failure' ? `${e.message} ${KEY_HELP}` : e.message);
+              process.exitCode = 1;
+            }
+          }
+          // Commando Center: store the key check and send a `check` report.
+          if (!self.versionReports()) {
+            console.log('Version reports: off (versionReports: false or SUPERTEXT_VERSION_REPORTS=0).');
             return;
           }
-          try {
-            await self.client().validateApiKey();
-            console.log('Connected. The API key works.');
-          } catch (e) {
-            console.log(e.code === 'authentication_failure' ? `${e.message} ${KEY_HELP}` : e.message);
-            process.exitCode = 1;
+          if (!url) {
+            console.log('Version reports: on, but not sent from this task: set APOS_BASE_URL (Apostrophe\'s baseUrl).');
+            return;
           }
+          const reporting = self.reporting();
+          let result = await reporting.run('testConnection', url);
+          if (!result || !result.sent) {
+            result = await reporting.run('reportCheck', url);
+          }
+          console.log(`Version report: ${result && result.sent ? `sent (${result.event})` : 'not sent'}, ping address ${reporting.callbackUrl(url)}`);
         }
       },
       translate: {
@@ -321,6 +492,7 @@ module.exports = {
           if (argv.type) {
             criteria.type = String(argv.type);
           }
+          await self.reporting().run('onRequest', self.siteUrl(null));
           const doc = await self.apos.doc.find(req, criteria).toObject();
           if (!doc) {
             console.log(`Not found: ${JSON.stringify(criteria)} in ${from}. Use --slug (and --type for pieces).`);

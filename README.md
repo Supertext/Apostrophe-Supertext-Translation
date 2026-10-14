@@ -6,12 +6,13 @@ AI translation for [ApostropheCMS](https://apostrophecms.com) by [Supertext](htt
 // app.js
 modules: {
   'supertext-apostrophe-translation': {
-    options: { languages: { de: { code: 'de-CH', politeness: 'more' } } }
+    // The Supertext language of each locale (Supertext needs e.g. de-CH or de-DE, not de)
+    options: { languages: { de: { code: 'de-CH', politeness: 'more' }, fr: 'fr-CH' } }
   }
 }
 ```
 
-Translates titles and text fields, rich text (a paragraph at a time, with formatting and links kept), the text of other widgets, arrays and objects, and gives new localizations a translated URL. Works for pages and pieces, one at a time or in batches, and includes a status screen for administrators and the tasks `check` and `translate`.
+Translates titles and text fields, rich text (a paragraph at a time, with formatting and links kept), the text of other widgets, arrays and objects, and gives new localizations a translated URL. Works for pages and pieces, one at a time or in batches, and includes a status screen for administrators (with the automatic API key check and the language mapping) and the tasks `check` and `translate`. It sends version information to Supertext (no content, no key; [can be turned off](docs/INSTALLATION.md#version-reports-commando-center)).
 
 ![Apostrophe's Localize Content wizard with "Translate text content" ticked and the note "Translated by Supertext AI"](docs/images/localize-translate.png)
 

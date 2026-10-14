@@ -55,7 +55,9 @@ apostrophe({
     'supertext-demo': {},
     'supertext-apostrophe-translation': {
       options: {
+        // Supertext language per locale (the same code serves as source and target).
         languages: {
+          en: { code: 'en-GB' },
           de: { code: 'de-CH', politeness: 'more' },
           fr: { code: 'fr-CH', politeness: 'more' },
           it: { code: 'it-CH', politeness: 'more' }

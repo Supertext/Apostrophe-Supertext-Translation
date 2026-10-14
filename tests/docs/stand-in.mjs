@@ -4,6 +4,8 @@
  * returns German, French and Italian for the demo's sample article (samples.json: real
  * Supertext output, keyed by target language's primary subtag).
  * Unknown text comes back as "[<target>] text". Listens on :8765 (any API key).
+ * Also stands in for the Commando Center: `POST /report` stores version reports (point
+ * SUPERTEXT_REPORT_URL at http://127.0.0.1:8765/report), `GET /reports` lists them.
  */
 import http from 'node:http'
 import { randomBytes } from 'node:crypto'
@@ -19,6 +21,7 @@ const samples = Object.fromEntries(
   ]),
 )
 const files = new Map()
+const reports = []
 
 http
   .createServer(async (req, res) => {
@@ -27,6 +30,17 @@ http
       res.writeHead(status, { 'Content-Type': type })
       res.end(type === 'application/json' ? JSON.stringify(body) : body)
     }
+    if (path === '/report' && req.method === 'POST') {
+      const chunks = []
+      for await (const chunk of req) chunks.push(chunk)
+      try {
+        reports.push(JSON.parse(Buffer.concat(chunks).toString('utf8')))
+      } catch {
+        return send(400, { ok: false, error: 'not JSON' })
+      }
+      return send(202, { ok: true })
+    }
+    if (path === '/reports' && req.method === 'GET') return send(200, reports)
     if (!/^Supertext-Auth-Key \S+$/.test(req.headers.authorization || '')) return send(401, { detail: 'missing key' })
     if (path === '/features') return send(200, {})
     if (req.method === 'POST') {

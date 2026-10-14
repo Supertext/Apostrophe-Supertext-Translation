@@ -2,7 +2,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { collectUnits } = require('../lib/collect');
-const { translateUnits, languageCode, politeness, sourceCode } = require('../lib/translate');
+const { translateUnits, languageStatus, mapping, politeness, sourceCode, targetCode, targetOrNull } = require('../lib/translate');
+const { SupertextError } = require('../lib/sdk');
 
 const schema = [
   { name: 'title', type: 'string' },
@@ -66,42 +67,72 @@ test('translates and writes back through a client', async () => {
   assert.equal(d.faq[0].url, 'https://x');
 });
 
-test('language mapping', () => {
-  assert.equal(politeness('de', { de: { politeness: 'less' } }), 'less');
-  assert.equal(politeness('fr'), 'default');
+test('mapping: the languages option, long and short form', () => {
+  assert.deepEqual(mapping({ de: { code: 'de-CH' }, fr: 'fr-CH', it: { politeness: 'more' } }), { de: 'de-CH', fr: 'fr-CH' });
+  assert.deepEqual(mapping(), {});
 });
 
-test('source: bare language stays bare', () => {
+test('target: the mapping wins, else an exact match, else unsupported_language', () => {
+  assert.equal(targetCode('de', { de: { code: 'de-CH' } }), 'de-CH');
+  assert.equal(targetCode('ch', { ch: { code: 'de-CH' } }), 'de-CH');
+  assert.equal(targetCode('de-ch'), 'de-CH');
+  assert.equal(targetCode('de_CH'), 'de-CH');
+  assert.equal(targetCode('zh-hant'), 'zh-Hant');
+  assert.equal(targetCode('es'), 'es');
+  assert.equal(targetCode('nl'), 'nl');
+  // No default regions: a bare `de` or `en` target is not guessed.
+  for (const locale of [ 'de', 'en', 'fr', 'xx', 'de-XX' ]) {
+    assert.throws(() => targetCode(locale), (e) => e instanceof SupertextError && e.code === 'unsupported_language', locale);
+  }
+  assert.equal(targetOrNull('de'), null);
+});
+
+test('source: one mapping for both directions', () => {
   assert.equal(sourceCode('en'), 'en');
+  assert.equal(sourceCode('de', { de: { code: 'de-CH' } }), 'de');
+  assert.equal(sourceCode('en-US'), 'en');
+  assert.throws(() => sourceCode('xx'), (e) => e.code === 'unsupported_language');
 });
 
-test('source: regional code becomes the bare language', () => {
-  assert.equal(sourceCode('pt-BR'), 'pt');
-  assert.equal(sourceCode('en_GB'), 'en');
-  assert.equal(sourceCode(languageCode('DE-ch')), 'de');
+test('politeness only where Supertext offers it', () => {
+  assert.equal(politeness('de', { de: { code: 'de-CH', politeness: 'less' } }), 'less');
+  assert.equal(politeness('fr', { fr: { code: 'fr-CH' } }), 'default');
+  // English has no formal/informal address: not sent.
+  assert.equal(politeness('en', { en: { code: 'en-US', politeness: 'more' } }), 'default');
+  assert.equal(politeness('xx', { xx: { politeness: 'more' } }), 'default');
 });
 
-test('target: bare language gets its default region', () => {
-  assert.equal(languageCode('de'), 'de-DE');
-  assert.equal(languageCode('en'), 'en-US');
-  assert.equal(languageCode('sl'), 'sl-SI');
-  assert.equal(languageCode('ZH'), 'zh-CN');
+test('languageStatus for the status screen', () => {
+  const languages = { de: { code: 'de-CH', politeness: 'more' }, en: { code: 'en-GB', politeness: 'more' }, ko: { code: 'ko-KR' } };
+  assert.deepEqual(languageStatus('de', languages), {
+    locale: 'de', code: 'de-CH', mapped: true, supported: true, known: true, source: 'de',
+    politeness: 'more', politenessAvailable: true, politenessIgnored: false
+  });
+  const en = languageStatus('en', languages);
+  assert.equal(en.politeness, 'default');
+  assert.equal(en.politenessIgnored, true);
+  const fr = languageStatus('fr', languages);
+  assert.equal(fr.supported, false);
+  assert.equal(fr.code, null);
+  assert.equal(fr.source, 'fr');
+  // A mapped code is sent as it is, but flagged when Supertext doesn't list it.
+  assert.equal(languageStatus('ko', languages).known, false);
 });
 
-test('target: regional code is kept and normalized', () => {
-  assert.equal(languageCode('de-CH'), 'de-CH');
-  assert.equal(languageCode('de_CH'), 'de-CH');
-  assert.equal(languageCode('fr-ch'), 'fr-CH');
-  assert.equal(languageCode('zh-hant'), 'zh-Hant');
-  assert.equal(languageCode('es-419'), 'es-419');
+test('an unsupported locale sends nothing', async () => {
+  let called = false;
+  const client = { translateTexts: async () => { called = true; return new Map(); } };
+  const units = [ { text: 'Hello', html: false, path: 'title', apply: () => true } ];
+  await assert.rejects(translateUnits(client, units, 'en', 'de'), (e) => e.code === 'unsupported_language');
+  await assert.rejects(translateUnits(client, units, 'xx', 'de', { de: 'de-CH' }), (e) => e.code === 'unsupported_language');
+  assert.equal(called, false);
 });
 
-test('target: configured code wins (source uses its language)', () => {
-  assert.equal(languageCode('de', { de: { code: 'de-CH' } }), 'de-CH');
-  assert.equal(languageCode('ch', { ch: { code: 'de_ch' } }), 'de-CH');
-  assert.equal(sourceCode(languageCode('ch', { ch: { code: 'de-CH' } })), 'de');
-});
-
-test('target: unknown bare code is sent unchanged', () => {
-  assert.equal(languageCode('xx'), 'xx');
+test('codes and politeness passed to the client', async () => {
+  let args;
+  const client = { translateTexts: async (...a) => { args = a; return new Map([ [ '0', 'Hallo' ] ]); } };
+  const units = [ { text: 'Hello', html: false, path: 'title', apply: () => true } ];
+  await translateUnits(client, units, 'en', 'de', { de: { code: 'de-CH', politeness: 'more' }, en: { code: 'en-GB', politeness: 'less' } });
+  assert.equal(args[1], 'de-CH');
+  assert.deepEqual(args[2], { sourceLang: 'en', politeness: 'more' });
 });

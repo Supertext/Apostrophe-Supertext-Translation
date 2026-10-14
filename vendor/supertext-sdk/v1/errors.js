@@ -8,6 +8,8 @@ export const ErrorCode = {
     MissingApiKey: 'missing_api_key',
     AuthenticationFailure: 'authentication_failure',
     InvalidLanguagePair: 'invalid_language_pair',
+    UnsupportedLanguage: 'unsupported_language',
+    UnsupportedFeature: 'unsupported_feature',
     NotFound: 'not_found',
     PayloadTooLarge: 'payload_too_large',
     TooManyRequests: 'too_many_requests',
@@ -25,6 +27,8 @@ const MESSAGES = {
     missing_api_key: 'No Supertext API key is configured.',
     authentication_failure: 'Supertext rejected the API key. Please check it.',
     invalid_language_pair: 'Supertext does not support this language pair.',
+    unsupported_language: 'This language has no Supertext language code. Map it to a Supertext language.',
+    unsupported_feature: 'Supertext does not support this option for the language pair.',
     not_found: 'The Supertext file was not found (expired or already deleted).',
     payload_too_large: 'The document is too large for Supertext to translate.',
     too_many_requests: 'Too many requests to Supertext. Please try again shortly.',
@@ -45,6 +49,7 @@ export class SupertextError extends Error {
     apiErrorCode;
     sourceLang;
     targetLang;
+    feature;
     constructor(code, details = {}) {
         let message = MESSAGES[code];
         if (details.status !== undefined)
@@ -65,6 +70,8 @@ export class SupertextError extends Error {
             this.sourceLang = details.sourceLang;
         if (details.targetLang)
             this.targetLang = details.targetLang;
+        if (details.feature)
+            this.feature = details.feature;
     }
 }
 // Fields only count as strings: the API's JSON isn't trusted to have the documented types.
@@ -99,6 +106,18 @@ export function errorForStatus(status, body) {
             details.sourceLang = sourceLang;
         if (targetLang !== undefined)
             details.targetLang = targetLang;
+    }
+    else if (status === 400 && apiErrorCode === 'FEATURE_ERROR') {
+        code = 'unsupported_feature';
+        const sourceLang = str(json?.source_lang);
+        const targetLang = str(json?.target_lang);
+        const feature = str(json?.feature);
+        if (sourceLang !== undefined)
+            details.sourceLang = sourceLang;
+        if (targetLang !== undefined)
+            details.targetLang = targetLang;
+        if (feature !== undefined)
+            details.feature = feature;
     }
     else if (status === 401 || status === 403) {
         code = 'authentication_failure';
