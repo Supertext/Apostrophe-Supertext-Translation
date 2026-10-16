@@ -1,5 +1,5 @@
 /**
- * The automatic API key check (spec/reporting.json → fingerprint, apiKeyCheck).
+ * The automatic API key check (spec/api-key-check.json).
  * Plugins run it on every settings save, when a key from the environment changed,
  * and on "Test connection", and show the result to administrators.
  */

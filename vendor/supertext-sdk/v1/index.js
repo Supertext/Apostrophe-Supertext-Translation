@@ -13,4 +13,3 @@ export { Languages, SOURCE_LANGUAGES, TARGET_LANGUAGES, matchSource, matchTarget
 export { HtmlDocument } from './html-document.js';
 export { DEFAULT_MAX_CHARACTERS, planBatches } from './batching.js';
 export { apiKeyFingerprint, apiKeyCheckFromError, KEY_CHECK_TIMEOUT_MS } from './api-key-check.js';
-export { DEFAULT_REPORT_URL, EMPTY_REPORTER_STATE, FAILURE_BACKOFF_MS, InstallationReporter, REPORT_TIMEOUT_MS, pingResponse, reporterState, reportsEnabled, } from './reporting.js';

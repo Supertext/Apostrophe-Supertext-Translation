@@ -3,12 +3,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { SupertextClient, SupertextError, Languages, InstallationReporter, SDK_VERSION, baseUrlFor, normalizeKey } = require('../lib/sdk');
+const { SupertextClient, SupertextError, Languages, SDK_VERSION, baseUrlFor, normalizeKey } = require('../lib/sdk');
 
 test('the vendored SDK loads and says where it comes from', () => {
   assert.equal(typeof SupertextClient, 'function');
   assert.equal(typeof SupertextError, 'function');
-  assert.equal(typeof InstallationReporter, 'function');
+  assert.equal(typeof SupertextClient.prototype.checkApiKey, 'function');
   assert.match(SDK_VERSION, /^\d+\.\d+\.\d+/);
   assert.equal(SDK_VERSION, fs.readFileSync(path.join(__dirname, '../vendor/supertext-sdk/VERSION'), 'utf8').trim());
   const source = fs.readFileSync(path.join(__dirname, '../vendor/supertext-sdk/COMMIT'), 'utf8');

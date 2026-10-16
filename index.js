@@ -406,7 +406,7 @@ module.exports = {
         // GET /api/v1/supertext-apostrophe-translation/ping?challenge=… : the Commando
         // Center's reachability check. Public (no login, session or CSRF token), never cached,
         // answers only while version reports are on (404 otherwise). Body and headers come
-        // from the SDK's pingResponse: nothing but the plugin name and a valid challenge.
+        // from Plugin Health's pingResponse: nothing but the plugin name and a valid challenge.
         ping(req, res) {
           let answer;
           try {

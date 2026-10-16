@@ -60,7 +60,7 @@ export declare class SupertextClient {
     /** Cost-free check that the API key is accepted (`GET features`). Throws a `SupertextError` if not. */
     validateApiKey(): Promise<void>;
     /**
-     * The automatic API key check (Commando Center protocol): `GET features` with a
+     * The automatic API key check (spec/api-key-check.json): `GET features` with a
      * 10 s timeout, mapped to `ok`, `invalid`, `missing`, `unreachable` or `error`.
      * Never throws. A blank key gives `missing` without a request.
      */

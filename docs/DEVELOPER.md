@@ -8,13 +8,15 @@ The package is one Apostrophe module, `supertext-apostrophe-translation` (alias 
 
 ```
 index.js                     the module: provider, status screen, API routes, tasks
-lib/sdk.js                   loads the vendored Supertext SDK (its v1 API); API addresses per environment
+lib/sdk.js                   loads the vendored Supertext SDK (its v1 API: client, API key check); API addresses per environment
 lib/document.js              text units: one per plain-text field, one per rich-text paragraph
 lib/collect.js               field rules: finds the texts of a document by its schema
 lib/translate.js             language codes (the languages option), form of address, sends units through the SDK
-lib/reporting.js             Commando Center glue: version reports, API key check, ping (SDK's InstallationReporter)
+lib/reporting.js             Commando Center glue: version reports, API key check, ping (Plugin Health's InstallationReporter)
 vendor/supertext-sdk/        the Supertext TypeScript SDK (built JavaScript), copied by scripts/vendor-sdk.sh
+vendor/supertext-plugin-health/  Supertext Plugin Health (built JavaScript), copied by scripts/vendor-plugin-health.sh
 scripts/vendor-sdk.sh          updates vendor/supertext-sdk from the SDK repository
+scripts/vendor-plugin-health.sh  updates vendor/supertext-plugin-health from the Commando Center repository
 i18n/supertext/<lang>.json   UI strings (en, de, fr, it), namespace "supertext"
 i18n/apostrophe/<lang>.json  overrides Apostrophe's automaticTranslationDisclaimer
 ui/apos/components/SupertextStatusModal.vue   admin status screen
@@ -28,7 +30,7 @@ Keep `lib/` free of Apostrophe imports: the unit tests run without Apostrophe.
 
 ### Supertext SDK (`vendor/supertext-sdk`)
 
-All talking to Supertext goes through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`, npm name `supertext-sdk`), the shared client of all Supertext plugins. The module ships its own copy of the SDK's built JavaScript in `vendor/supertext-sdk/` (sites install only the module, also once the SDK is on npm; Apostrophe modules have no build step that could bundle it) (ES modules, loaded with `require()`, which Node 22.12+ supports). `COMMIT` names the SDK commit, `VERSION` the SDK version, and the copy's `package.json` only marks the files as ES modules. Since SDK 0.2.0 everything API-bound is in `v1/` (`lib/sdk.js` loads `vendor/supertext-sdk/v1/index.js`; `version.js` has `SDK_VERSION`); a later API version would get `v2/` next to it. Never edit those files: fix the SDK repository and copy it again with `scripts/vendor-sdk.sh [ref]` (it builds the SDK and replaces the copy entirely):
+All talking to Supertext goes through the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide) (`sdk/typescript`, npm name `supertext-sdk`), the shared client of all Supertext plugins: it provides the client and the API key check (`checkApiKey()`, `apiKeyFingerprint`, `SDK_VERSION`); version reports and the ping are in *Supertext Plugin Health* (below). The module ships its own copy of the SDK's built JavaScript in `vendor/supertext-sdk/` (sites install only the module, also once the SDK is on npm; Apostrophe modules have no build step that could bundle it) (ES modules, loaded with `require()`, which Node 22.12+ supports). `COMMIT` names the SDK commit, `VERSION` the SDK version, and the copy's `package.json` only marks the files as ES modules. Since SDK 0.2.0 everything API-bound is in `v1/` (`lib/sdk.js` loads `vendor/supertext-sdk/v1/index.js`; `version.js` has `SDK_VERSION`); a later API version would get `v2/` next to it. Never edit those files: fix the SDK repository and copy it again with `scripts/vendor-sdk.sh [ref]` (it builds the SDK and replaces the copy entirely):
 
 ```bash
 scripts/vendor-sdk.sh                  # latest main of the SDK repository (also: npm run vendor-sdk)
@@ -37,6 +39,18 @@ SDK_DIR=/path/to/Supertext-API-SDK-and-Guide scripts/vendor-sdk.sh   # a local c
 ```
 
 Then run the tests and the demo check, and note the new SDK version in `CHANGELOG.md`. `check` prints the SDK version.
+
+### Supertext Plugin Health (`vendor/supertext-plugin-health`)
+
+[Supertext Plugin Health](https://github.com/Supertext/Commando-Center-Supertext-Translation/tree/main/plugin-health) (`plugin-health/typescript` in the Commando Center repository, package name `supertext-plugin-health`) sends the version reports and the API key check result to the Supertext Commando Center and answers its reachability ping (`InstallationReporter`, `reportsEnabled()`, `reporterState()`, `pingResponse()`; see *Commando Center* below). It has no dependencies and doesn't need the SDK: `lib/reporting.js` passes in the SDK's `SDK_VERSION` and a key checker built from the SDK's `checkApiKey()` and `apiKeyFingerprint`. The module ships the built JavaScript in `vendor/supertext-plugin-health/`, next to the SDK copy and loaded the same way (ES modules via `require()`); `COMMIT` and `VERSION` say where it comes from, the copy's `package.json` only marks the files as ES modules. Never edit those files: fix Plugin Health in Commando-Center-Supertext-Translation/plugin-health and copy it again with `scripts/vendor-plugin-health.sh` (it builds it and replaces the copy entirely):
+
+```bash
+scripts/vendor-plugin-health.sh plugin-health-v0.1.0   # a release tag (also: npm run vendor-plugin-health -- <tag>)
+scripts/vendor-plugin-health.sh                        # latest main of the Commando Center repository
+PLUGIN_HEALTH_DIR=/path/to/Commando-Center-Supertext-Translation scripts/vendor-plugin-health.sh   # a local clone, as it is
+```
+
+Then run the tests and the demo check, and note the new Plugin Health version in `CHANGELOG.md`.
 
 ### Hook point: Apostrophe's translation provider API
 
@@ -107,17 +121,17 @@ The stand-in (`tests/docs/stand-in.mjs`) rejects bare targets and regional sourc
 
 ## Commando Center: version reports, key check, ping
 
-Protocol: [Commando-Center-Supertext-Translation](https://github.com/Supertext/Commando-Center-Supertext-Translation) → `docs/DEVELOPER.md` → *Report protocol*. The SDK's `InstallationReporter`, `reportsEnabled()`, `reporterState()` and `pingResponse()` implement it (the key check is the SDK's `validateApiKey()` inside the reporter); `lib/reporting.js` (no Apostrophe imports) loads the state, runs one reporter action and stores the new state, serialized and never throwing; `index.js` (`reporting()`, `siteUrl()`, `reportInBackground()`) gives it what Apostrophe knows.
+Protocol: [Commando-Center-Supertext-Translation](https://github.com/Supertext/Commando-Center-Supertext-Translation) → `docs/DEVELOPER.md` → *Report protocol*. Supertext Plugin Health's `InstallationReporter`, `reportsEnabled()`, `reporterState()` and `pingResponse()` implement it (the key check is the SDK's `checkApiKey()`, passed in as the reporter's key checker with `apiKeyFingerprint`; the SDK client gets the module's API address and User-Agent); `lib/reporting.js` (no Apostrophe imports) loads the state, runs one reporter action and stores the new state, serialized and never throwing; `index.js` (`reporting()`, `siteUrl()`, `reportInBackground()`) gives it what Apostrophe knows.
 
 - **Setting:** module option `versionReports` (*Send version information to Supertext*, default `true`). `SUPERTEXT_VERSION_REPORTS` (`0/false/off/no`, `1/true/on/yes`) wins (`reportsEnabled()`). Off: no reports, ping 404, no ping address on the status screen. `SUPERTEXT_REPORT_URL` sends reports elsewhere (CI, screenshots: the stand-in's `POST /report`, which `GET /reports` lists). Settings live in options and the environment, so there is no `afterSettingsSaved`: the reporter's `onRequest` checks the key when its fingerprint changed.
-- **Report fields:** `site_url` = Apostrophe's `baseUrl` (`APOS_BASE_URL`) if absolute, else the request's origin, plus Apostrophe's `prefix` (tasks without `APOS_BASE_URL` report nothing; the key check still runs in `check`); plugin `Apostrophe-Supertext-Translation` with `package.json`'s version; system `ApostropheCMS` with `apostrophe/package.json`'s version; runtime Node.js (SDK default); `callback.url` = `<site URL>/api/v1/supertext-apostrophe-translation/ping`.
+- **Report fields:** `site_url` = Apostrophe's `baseUrl` (`APOS_BASE_URL`) if absolute, else the request's origin, plus Apostrophe's `prefix` (tasks without `APOS_BASE_URL` report nothing; the key check still runs in `check`); plugin `Apostrophe-Supertext-Translation` with `package.json`'s version; system `ApostropheCMS` with `apostrophe/package.json`'s version; runtime Node.js (Plugin Health's default); `sdk_version` = the bundled SDK's `SDK_VERSION`; `callback.url` = `<site URL>/api/v1/supertext-apostrophe-translation/ping`.
 - **When:**
   - `onRequest`: the status route, every `translate()` call (the *Localize…* step), the `translate` task. On web requests in the background (`setImmediate`, after the route's work), so neither Supertext nor the center slows the request down; in tasks awaited.
   - `authenticationFailed`: a translation failed with `authentication_failure` (HTTP 401/403).
   - `testConnection`: *Test connection* (`POST …/test`, returns `{ ok, status, checkedAt, message }`, the message being the center's key-check text in the admin's language).
   - `check` task: `testConnection`, then `reportCheck` if that sent nothing.
-- **State:** the SDK's JSON state in Apostrophe's cache collection (`aposCache`, namespace `supertext-apostrophe-translation`, key `reporter`, no expiry), via `apos.cache.get/set`, which works on every database Apostrophe supports. Load and save errors are swallowed. The API key is never stored, logged or sent; only the SDK's fingerprint is kept.
-- **Ping:** a plain `routes` GET route (`ping`, not `apiRoutes`, so the SDK's status, headers and body go out unchanged: `Cache-Control: no-store`, 400 for a bad challenge, 404 when off). GET routes need no CSRF token or login in Apostrophe.
+- **State:** Plugin Health's JSON state (the same format the SDK 0.1–0.2 reporter stored, so updating kept the history: no new `installed` report) in Apostrophe's cache collection (`aposCache`, namespace `supertext-apostrophe-translation`, key `reporter`, no expiry), via `apos.cache.get/set`, which works on every database Apostrophe supports. Load and save errors are swallowed. The API key is never stored, logged or sent; only the SDK's fingerprint (`apiKeyFingerprint`) is kept.
+- **Ping:** a plain `routes` GET route (`ping`, not `apiRoutes`, so Plugin Health's status, headers and body go out unchanged: `Cache-Control: no-store`, 400 for a bad challenge, 404 when off). GET routes need no CSRF token or login in Apostrophe.
 - **Messages:** `supertext:keyCheck_<status>` (the center's five texts in four languages). The status screen links *supertext.com* and *supertext.com → Integrations → API* inside them (`linkParts()`, new tab), and shows the last check with its time.
 - **Tests:** `test/reporting.test.js` runs the glue with a fake transport (never the live center); `tests/demo-check.sh` checks the ping and the reports the stand-in received in the demo image.
 
@@ -150,7 +164,7 @@ The stand-in (`tests/docs/stand-in.mjs`) answers like the Supertext API: texts f
 
 ## Tests
 
-- `npm test`: unit tests for the text units (rich text split into paragraphs, formatting and links kept), the field rules and the translation through a fake client, the vendored SDK (it loads, sends the auth header, the language codes and deletes the file), the language mapping (no guessing, `unsupported_language` sends nothing, politeness only where offered), the Commando Center glue with a fake transport and the UI strings (every language has the same keys, placeholders and URLs as English). The SDK's own tests and conformance scenarios run in the SDK repository.
+- `npm test`: unit tests for the text units (rich text split into paragraphs, formatting and links kept), the field rules and the translation through a fake client, the vendored SDK (it loads, sends the auth header, the language codes and deletes the file), the vendored Plugin Health copy (it loads, keeps state stored by the old SDK reporter), the language mapping (no guessing, `unsupported_language` sends nothing, politeness only where offered), the Commando Center glue with a fake transport and the UI strings (every language has the same keys, placeholders and URLs as English). The SDK's own tests and conformance scenarios run in the SDK repository, Plugin Health's in the Commando Center repository.
 - `tests/demo-check.sh` (CI): builds on the demo image, starts it twice against PostgreSQL and the stand-in, checks the demo accounts (created once, never duplicated, no password in the log), runs `check` (key check and a version report to the stand-in), checks the public ping, translates the sample page and article with the `translate` task into de/fr/it, checks that a second run skips existing locales, and reads the German page and Italian article back through Apostrophe's REST API as the editor.
 
 ```bash
@@ -203,7 +217,7 @@ Railway settings (set on the service; `railway.json` is ignored): Dockerfile pat
 
 Dependabot (`.github/dependabot.yml`) opens weekly pull requests: minor and patch updates grouped into one, GitHub Actions in another, each major update on its own. Merge one when CI is green and it doesn't change what the plugin supports.
 
-`vendor/supertext-sdk` isn't watched by Dependabot: update it with `npm run vendor-sdk` (see *Supertext SDK*).
+`vendor/supertext-sdk` and `vendor/supertext-plugin-health` aren't watched by Dependabot: update them with `npm run vendor-sdk` and `npm run vendor-plugin-health -- <tag>` (see *Supertext SDK* and *Supertext Plugin Health*).
 
 Some major versions are ignored on purpose: TypeScript (7.x is the native compiler, which the type-checking and build tools here don't support yet) and `@types/node` (the types must match the oldest Node version the plugin supports, not the newest). Lift an ignore rule when the plugin moves to the new version.
 

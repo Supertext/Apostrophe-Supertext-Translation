@@ -62,7 +62,7 @@ export class SupertextClient {
         await this.#request('GET', 'features');
     }
     /**
-     * The automatic API key check (Commando Center protocol): `GET features` with a
+     * The automatic API key check (spec/api-key-check.json): `GET features` with a
      * 10 s timeout, mapped to `ok`, `invalid`, `missing`, `unreachable` or `error`.
      * Never throws. A blank key gives `missing` without a request.
      */

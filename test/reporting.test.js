@@ -2,7 +2,10 @@
 // Commando Center glue (lib/reporting.js) with a fake transport: never reaches the live center.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { Reporting, PLUGIN_NAME, siteUrl, absoluteUrl, versionReportsEnabled } = require('../lib/reporting');
+const { SDK_VERSION } = require('../lib/sdk');
 
 function setup({ apiKey = 'secret-key', versionReports, features = 200 } = {}) {
   let stored = null;
@@ -74,6 +77,7 @@ test('first back-end request: key check and an installed report with the callbac
   assert.equal(report.site_url, 'https://www.example.ch');
   assert.equal(report.callback.url, 'https://www.example.ch/api/v1/supertext-apostrophe-translation/ping');
   assert.equal(report.api_key_check.status, 'ok');
+  assert.equal(report.sdk_version, SDK_VERSION);
   assert.ok(!JSON.stringify(report).includes('secret-key'), 'the key is never sent');
   assert.equal(stored().keyCheck.status, 'ok');
 
@@ -82,6 +86,29 @@ test('first back-end request: key check and an installed report with the callbac
   assert.equal(again.event, null);
   assert.equal(reports.length, 1);
   assert.equal(keyChecks.length, 1);
+});
+
+test('the vendored Plugin Health copy says where it comes from', () => {
+  const dir = path.join(__dirname, '../vendor/supertext-plugin-health');
+  assert.match(fs.readFileSync(path.join(dir, 'VERSION'), 'utf8'), /^\d+\.\d+\.\d+\n$/);
+  assert.match(fs.readFileSync(path.join(dir, 'COMMIT'), 'utf8'), /^[0-9a-f]{40}\n$/);
+});
+
+test('state stored by the SDK 0.2 reporter is kept: no new installed report', async () => {
+  const { reporting, reports, keyChecks, stored } = setup();
+  const versions = `1.2.3|4.33.0|${process.version.replace(/^v/, '')}`;
+  const fingerprint = require('../lib/sdk').apiKeyFingerprint('secret-key');
+  await reporting.ctx.storage.set({
+    reportedVersions: versions,
+    reportedKeyStatus: 'ok',
+    lastFailureAt: null,
+    keyCheck: { status: 'ok', checkedAt: '2026-10-01T08:00:00Z', httpStatus: 200, errorCode: null, fingerprint }
+  });
+  const result = await reporting.run('onRequest', 'https://www.example.ch');
+  assert.equal(result.event, null);
+  assert.equal(reports.length, 0);
+  assert.equal(keyChecks.length, 0);
+  assert.equal(stored().reportedVersions, versions);
 });
 
 test('a 401 during a translation marks the key invalid once', async () => {
