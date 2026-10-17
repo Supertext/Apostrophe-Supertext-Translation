@@ -6,4 +6,6 @@ demo/.env
 demo/public/apos-frontend/
 demo/public/uploads/
 tests/docs/node_modules/
+tests/e2e/node_modules/
+tests/e2e/artifacts/
 demo/apos-build/

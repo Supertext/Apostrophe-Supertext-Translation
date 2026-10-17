@@ -1,0 +1,231 @@
+name: E2E
+
+# The demo image is built once and started twice:
+# 1. against the REAL Supertext API (secret SUPERTEXT_API_KEY): language list check and the
+#    end-to-end test (tests/e2e), so language mapping and the live API's behaviour are tested;
+# 2. against the stand-in API (tests/docs): the docs screenshots, so the images don't change
+#    with every machine translation. Changed images become a pull request.
+# See "End-to-end tests" and "Docs screenshots" in docs/DEVELOPER.md.
+
+on:
+  workflow_dispatch:
+  # A pull request that changes the E2E test itself runs it before merging.
+  pull_request:
+    paths:
+      - 'tests/e2e/**'
+      - '.github/workflows/e2e.yml'
+  schedule:
+    - cron: '6 5 * * 1' # Mondays, 05:06 UTC
+  push:
+    branches: [main]
+    paths:
+      - 'index.js'
+      - 'lib/**'
+      - 'vendor/**'
+      - 'i18n/**'
+      - 'ui/**'
+      - 'package.json'
+      - 'demo/**'
+      - 'tests/**'
+      - '.github/workflows/e2e.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: E2E (live API) and screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      images-changed: ${{ steps.images.outputs.changed }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      LIVE_URL: http://127.0.0.1:8081
+      DOCS_URL: http://127.0.0.1:8082
+      # Each demo creates its own database (APOSTROPHE_DB_NAME) on this server.
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build the demo image (cached between runs)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: demo/Dockerfile
+          tags: supertext-apostrophe-demo
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Demo accounts for this run only
+        run: |
+          for v in DEMO_ADMIN_PASSWORD DEMO_EDITOR_PASSWORD APOS_SESSION_SECRET; do
+            value="$(openssl rand -hex 16)"
+            echo "::add-mask::$value"
+            echo "$v=$value" >> "$GITHUB_ENV"
+          done
+          {
+            echo "DEMO_ADMIN_EMAIL=admin@e2e.example.com"
+            echo "DEMO_EDITOR_EMAIL=editor@e2e.example.com"
+          } >> "$GITHUB_ENV"
+
+      - name: Install the test tools
+        run: |
+          (cd tests/e2e && npm ci --no-audit --no-fund)
+          (cd tests/docs && npm ci --no-audit --no-fund)
+          (cd tests/e2e && npx playwright install --with-deps chromium)
+          (cd tests/docs && npx playwright install chromium)
+
+      # --- 1. Real Supertext API ----------------------------------------------------------
+      - name: Check for the API key
+        id: key
+        env:
+          SUPERTEXT_API_KEY: ${{ secrets.SUPERTEXT_API_KEY }}
+        run: |
+          if [ -n "$SUPERTEXT_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Secret SUPERTEXT_API_KEY is not set: skipping the tests against the real Supertext API (see docs/DEVELOPER.md → End-to-end tests)."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Start the demo against the real API
+        if: steps.key.outputs.present == 'true'
+        env:
+          SUPERTEXT_API_KEY: ${{ secrets.SUPERTEXT_API_KEY }}
+        run: |
+          # Version reports off: CI runs are no installations for the Commando Center.
+          docker run -d --name demo-live --network host \
+            -e PORT=8081 -e APOS_BASE_URL="$LIVE_URL" -e APOS_SESSION_SECRET \
+            -e DATABASE_URL -e APOSTROPHE_DB_NAME=supertext_e2e_live \
+            -e SUPERTEXT_API_KEY -e SUPERTEXT_VERSION_REPORTS=0 \
+            -e DEMO_ADMIN_EMAIL -e DEMO_ADMIN_PASSWORD -e DEMO_EDITOR_EMAIL -e DEMO_EDITOR_PASSWORD \
+            supertext-apostrophe-demo
+          timeout 300 sh -c "until curl -sf -o /dev/null $LIVE_URL/health; do sleep 3; done" || { docker logs demo-live; exit 1; }
+
+      - name: Language list against the real API
+        if: steps.key.outputs.present == 'true'
+        env:
+          SUPERTEXT_API_KEY: ${{ secrets.SUPERTEXT_API_KEY }}
+          # As the module sends them (demo/app.js `languages`): source en-GB → en.
+          E2E_SOURCE: en
+          E2E_TARGETS: de-CH,fr-CH,it-CH
+        run: |
+          node tests/e2e/features.mjs
+
+      - name: End-to-end test against the real API
+        if: steps.key.outputs.present == 'true'
+        working-directory: tests/e2e
+        env:
+          BASE_URL: ${{ env.LIVE_URL }}
+          EDITOR_EMAIL: ${{ env.DEMO_EDITOR_EMAIL }}
+          EDITOR_PASSWORD: ${{ env.DEMO_EDITOR_PASSWORD }}
+        run: node live.mjs
+
+      # --- 2. Docs screenshots against the stand-in ----------------------------------------
+      - name: Screenshots against the stand-in API
+        if: success() || failure()
+        run: |
+          (cd tests/docs && nohup node stand-in.mjs > stand-in.log 2>&1 &)
+          docker run -d --name demo-docs --network host \
+            -e PORT=8082 -e APOS_BASE_URL="$DOCS_URL" -e APOS_SESSION_SECRET \
+            -e DATABASE_URL -e APOSTROPHE_DB_NAME=supertext_e2e_docs \
+            -e SUPERTEXT_API_KEY=stand-in -e SUPERTEXT_API_URL=http://127.0.0.1:8765/v1/ \
+            -e SUPERTEXT_REPORT_URL=http://127.0.0.1:8765/report \
+            -e DEMO_ADMIN_EMAIL -e DEMO_ADMIN_PASSWORD -e DEMO_EDITOR_EMAIL -e DEMO_EDITOR_PASSWORD \
+            supertext-apostrophe-demo
+          timeout 300 sh -c "until curl -sf -o /dev/null $DOCS_URL/health; do sleep 3; done" || { docker logs demo-docs; exit 1; }
+          cd tests/docs
+          BASE_URL="$DOCS_URL" node screenshots.mjs
+
+      - name: Did the screenshots change?
+        id: images
+        if: success() || failure()
+        run: |
+          if [ -n "$(git status --porcelain docs/images)" ]; then
+            git status --short docs/images
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the screenshots
+        if: steps.images.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-images
+          path: docs/images/
+
+      - name: Collect logs for debugging
+        if: failure()
+        run: |
+          mkdir -p e2e-debug
+          cp -r tests/e2e/artifacts e2e-debug/ 2>/dev/null || true
+          cp tests/docs/stand-in.log e2e-debug/ 2>/dev/null || true
+          for c in demo-live demo-docs; do docker logs "$c" > "e2e-debug/$c.log" 2>&1 || true; done
+
+      - name: Upload logs for debugging
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-debug
+          path: e2e-debug/
+          retention-days: 7
+
+  screenshots-pr:
+    name: Pull request with new screenshots
+    needs: e2e
+    if: needs.e2e.outputs.images-changed == 'true' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: docs-images
+          path: docs/images/
+
+      - name: Push a branch and open (or update) the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          branch=automation/docs-screenshots
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$branch"
+          git add docs/images
+          git commit -m "Docs: regenerate screenshots" -m "Made by the E2E workflow: $RUN_URL"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$branch"
+          if [ -z "$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --repo "$REPO" --head "$branch" --base main \
+              --title "Docs: regenerate screenshots" \
+              --body "The E2E workflow took new screenshots of the demo (against the stand-in API) and they differ from \`docs/images/\`. Check that the changes are intended before merging. Run: $RUN_URL"
+          fi

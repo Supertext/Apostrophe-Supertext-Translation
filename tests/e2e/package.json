@@ -1,0 +1,12 @@
+{
+  "name": "apostrophe-supertext-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end test of the demo against the real Supertext API (see docs/DEVELOPER.md)",
+  "scripts": {
+    "live": "node live.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.56.0"
+  }
+}

@@ -22,6 +22,7 @@ i18n/apostrophe/<lang>.json  overrides Apostrophe's automaticTranslationDisclaim
 ui/apos/components/SupertextStatusModal.vue   admin status screen
 test/                        unit tests (node --test), no Apostrophe needed
 tests/docs/                  stand-in API, sample translations, screenshot script
+tests/e2e/                   end-to-end test against the real Supertext API (Playwright)
 tests/demo-check.sh          CI check of the demo image
 demo/                        Railway demo site (Apostrophe starter kit + this module)
 ```
@@ -209,9 +210,30 @@ All demo variables are listed in `demo/.env.example`. On Railway they are servic
 
 Railway settings (set on the service; `railway.json` is ignored): Dockerfile path `demo/Dockerfile`, healthcheck `/health` (a static file), restart on failure, region `ams`. Uploads live in the container, so images added in the demo disappear on redeploy.
 
+## End-to-end tests
+
+The unit tests and `tests/demo-check.sh` use fakes. `.github/workflows/e2e.yml` also tests against the **real Supertext API**, so changes on Supertext's side (language codes, regional variants, formatting, rate limits) show up. It runs on every push to `main` that touches the module, the demo or the tests, on pull requests that change the E2E test or workflow, every Monday, and by hand (*Actions → E2E → Run workflow*). It builds the demo image once (Docker layer cache in GitHub Actions) and starts it twice on one PostgreSQL service, each with its own new database (`APOSTROPHE_DB_NAME`), port and demo accounts made up for the run:
+
+1. **Real API** (repository or organization secret `SUPERTEXT_API_KEY`; without it these steps are skipped with a warning). Version reports are off (`SUPERTEXT_VERSION_REPORTS=0`), so CI runs don't appear in the Commando Center.
+   - `tests/e2e/features.mjs` asks the live `GET features` (cost-free, no module or SDK code) whether every pair the demo translates (`en` → `de-CH`, `fr-CH`, `it-CH`, as the module sends them for the `languages` in `demo/app.js`) is offered; a missing pair fails the run. Whether the module's own language list matches the API is the SDK's job (its own tests).
+   - `tests/e2e/live.mjs` (Playwright): the editor (`DEMO_EDITOR_*`) localizes every English page (home page and sample page, from the page's own *More Options → Localize…*) and the sample article (from the *Articles* manager) into every other locale with Apostrophe's wizard and *Translate text content*, so the module's provider translates. The wizard must offer every locale for translation and report all of them localized, without an error notification. Then the results are read back through Apostrophe's REST API as the editor: every document has a draft in every locale, the translation isn't published, every text field (title, summary, each rich-text paragraph) is filled and at least 80 % of them changed (single words can stay the same), no `data-st-id`/placeholder is left, links (and their targets), bold and italics are kept, the text is in the target language (common words of each language counted) and de-CH has no "ß". Localizing again must update the same drafts (same ids, no duplicates, newer `updatedAt`). Each run translates the sample content twice into three languages (around 5,000 characters on the key's account).
+2. **Stand-in API**: the docs screenshots (see *Docs screenshots*), so the images don't change with each machine translation. If `docs/images/` changed, a second job pushes the branch `automation/docs-screenshots` and opens (or updates) the pull request "Docs: regenerate screenshots" (only for runs on `main`). This needs *Settings → Actions → General → Allow GitHub Actions to create and approve pull requests*.
+
+If a run fails, the artifact `e2e-debug` has the result pages (`artifacts/*.png`), the demo logs and the stand-in log. Locally:
+
+```bash
+cd tests/e2e && npm install && npx playwright install chromium
+# fresh demo (new database) with a real SUPERTEXT_API_KEY, e.g. on port 8081 (see Local development)
+SUPERTEXT_API_KEY=… E2E_SOURCE=en E2E_TARGETS=de-CH,fr-CH,it-CH node features.mjs
+BASE_URL=http://127.0.0.1:8081 EDITOR_EMAIL=… EDITOR_PASSWORD=… npm run live
+```
+
+`live.mjs` also passes against the stand-in API (it returns real translations for the sample content), which is how to try changes to it without a key.
+
 ## CI
 
 `.github/workflows/ci.yml`: unit tests on Node 22, 24 and 26; then builds the demo image and runs `tests/demo-check.sh` against a PostgreSQL service and the stand-in.
+`.github/workflows/checks.yml` and `links.yml` lint the workflows and check the links. `.github/workflows/e2e.yml` runs the end-to-end test against the real Supertext API and regenerates the docs screenshots (see *End-to-end tests*).
 
 ## Dependency updates
 
