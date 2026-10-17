@@ -65,8 +65,8 @@ Messages appear in your interface language (English, German, French or Italian).
 | Message | Meaning |
 | --- | --- |
 | *Supertext could not translate "…" into …: Supertext rejected the API key. Please check it.* | The site's Supertext API key is wrong or missing. Ask your administrator. |
-| *… The locale Deutsch (de) has no Supertext language. Ask your administrator to map it …* | Supertext doesn't know which language variant to use for this locale (e.g. Swiss or German standard German), so nothing was sent. Your administrator sets it in the module option `languages`; the Supertext screen lists all locales. Apostrophe's *Localize…* wizard also says when automatic translation isn't available for a locale. |
-| *… Supertext offers no formal or informal address for …* | A form of address was configured for a language that has none at Supertext. Ask your administrator. |
+| *… The locale … has no Supertext language. Ask your administrator to choose one …* | Supertext doesn't know which language variant to use for this locale (e.g. Irish English or Liechtenstein German), so nothing was sent. Your administrator chooses it in the admin bar under **Supertext → Languages**. Locales such as `de`, `fr` or `en` work without that (they use `de-DE`, `fr-FR`, `en-US` unless your administrator chose another variant). Apostrophe's *Localize…* wizard also says when automatic translation isn't available for a locale. |
+| *… Supertext offers no formal or informal address for …* | A form of address was configured for a language that has none at Supertext. Ask your administrator (Supertext → Languages). |
 | *… Supertext doesn't translate this language pair (…)* | The Supertext language set for the locale isn't one Supertext offers. Ask your administrator. |
 | *… Too many requests to Supertext. Please try again in a moment.* | Supertext is busy with your account's requests. Wait a moment and localize again, into fewer languages at once. |
 | *… Your Supertext translation quota is used up.* | The Supertext account's quota is used up. Ask your administrator. |

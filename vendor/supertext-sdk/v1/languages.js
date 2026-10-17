@@ -1,8 +1,10 @@
 /**
  * Languages of the Supertext AI file translation API v1 (spec/languages.json, from the live
- * `GET features`, October 2026). There is no default region and no guessing: an integration
- * maps its CMS languages to these codes; a CMS code that equals a Supertext code (apart from
- * case and `_`/`-`) is used as it is, anything else is an `unsupported_language` error until
+ * `GET features`, October 2026). An integration maps its CMS languages to these codes (a combo
+ * box per language, `suggestTarget()` preselected); a CMS code that equals a Supertext code
+ * (apart from case and `_`/`-`) is used as it is, a bare language Supertext offers only with a
+ * region or script gets its default (`de` → `de-DE`, see `DEFAULT_TARGETS`), a region of a bare
+ * target is dropped (`es-ES` → `es`), and anything else is an `unsupported_language` error until
  * the administrator maps it. For the live list, use `SupertextClient.getFeatures()`.
  */
 import { SupertextError } from './errors.js';
@@ -57,6 +59,19 @@ export const TARGET_LANGUAGES = freeze([
     { code: 'zh-Hans', name: 'Chinese (Simplified)', politeness: true },
     { code: 'zh-Hant', name: 'Chinese (Traditional)', politeness: true },
 ]);
+/**
+ * The default target of a bare language that Supertext offers only with a region or script.
+ * Swiss German (`gsw`) has none: neither dialect is the obvious one.
+ */
+export const DEFAULT_TARGETS = Object.freeze({
+    de: 'de-DE',
+    en: 'en-US',
+    fr: 'fr-FR',
+    it: 'it-IT',
+    pt: 'pt-PT',
+    sr: 'sr-Latn',
+    zh: 'zh-Hans',
+});
 /** Case, `_` vs `-` and surrounding spaces don't matter when comparing codes. */
 const key = (code) => code.trim().replace(/_/g, '-').toLowerCase();
 const SOURCES = new Map(SOURCE_LANGUAGES.map((l) => [key(l.code), l]));
@@ -65,6 +80,43 @@ const TARGETS = new Map(TARGET_LANGUAGES.map((l) => [key(l.code), l]));
 export function matchTarget(code) {
     return TARGETS.get(key(code))?.code ?? null;
 }
+const DEFAULTS = new Map(Object.entries(DEFAULT_TARGETS));
+const CHINESE_REGIONS = new Map([['tw', 'zh-Hant'], ['hk', 'zh-Hant'], ['mo', 'zh-Hant'], ['cn', 'zh-Hans'], ['sg', 'zh-Hans']]);
+/**
+ * The default target for a CMS code that has no exact match, else null: a bare language's
+ * `DEFAULT_TARGETS` entry (`de` → `de-DE`), Chinese regions (`zh-TW` → `zh-Hant`, `zh-CN` → `zh-Hans`),
+ * `language-Script-REGION` (`sr-Latn-RS` → `sr-Latn`) and `language-REGION` of a bare target
+ * (`es-ES` → `es`). Never a guessed region: `en-IE`, `de-LI` → null.
+ */
+export function defaultTarget(code) {
+    const k = key(code);
+    if (k === '' || TARGETS.has(k))
+        return null;
+    const parts = k.split('-');
+    const lang = parts[0];
+    if (parts.length === 1)
+        return DEFAULTS.get(lang) ?? null;
+    if (parts.length === 2 && lang === 'zh')
+        return CHINESE_REGIONS.get(parts[1]) ?? null;
+    if (parts.length === 3 && /^[a-z]{4}$/.test(parts[1]) && isRegion(parts[2]))
+        return TARGETS.get(`${lang}-${parts[1]}`)?.code ?? null;
+    if (parts.length === 2 && isRegion(parts[1]))
+        return TARGETS.get(lang)?.code ?? null;
+    return null;
+}
+const isRegion = (subtag) => /^(?:[a-z]{2}|[0-9]{3})$/.test(subtag);
+/** What a settings screen preselects for a CMS language: the exact match, else the default, else null. */
+export function suggestTarget(code) {
+    return matchTarget(code) ?? defaultTarget(code);
+}
+/**
+ * The targets sorted by English name, for the language combo box. Show the name localized where
+ * the platform can (e.g. `Intl.DisplayNames`) and the code next to it.
+ */
+export function targetOptions() {
+    return TARGET_OPTIONS;
+}
+const TARGET_OPTIONS = Object.freeze([...TARGET_LANGUAGES].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)));
 /** The supported source for `code`: exact match, else its first subtag (`en-US` → `en`), else null. */
 export function matchSource(code) {
     const k = key(code);
@@ -84,10 +136,11 @@ function mapped(code, mapping) {
 }
 /**
  * The target code to send: the mapping's value (sent as it is, even if not in the list), else an
- * exact match, else `SupertextError('unsupported_language')` (nothing is sent).
+ * exact match, else the default (`defaultTarget`), else `SupertextError('unsupported_language')`
+ * (nothing is sent).
  */
 export function target(code, mapping) {
-    const result = mapped(code, mapping) ?? matchTarget(code);
+    const result = mapped(code, mapping) ?? matchTarget(code) ?? defaultTarget(code);
     if (result === null)
         throw new SupertextError('unsupported_language', { targetLang: code.trim() || undefined });
     return result;
@@ -120,7 +173,11 @@ export function isSupportedSource(code) {
 export const Languages = Object.freeze({
     SOURCES: SOURCE_LANGUAGES,
     TARGETS: TARGET_LANGUAGES,
+    DEFAULT_TARGETS,
     matchTarget,
+    defaultTarget,
+    suggestTarget,
+    targetOptions,
     matchSource,
     target,
     source,

@@ -116,5 +116,12 @@ await page.evaluate(() => {
   for (const el of document.querySelectorAll('.supertext-ping-url')) el.textContent = 'https://www.example.ch/api/v1/supertext-apostrophe-translation/ping'
 })
 await shot(page, 'status.png', { x: 474, y: 0, width: 926, height: 820 })
+// The language mapping: one combo box per locale, then "Save languages".
+await page.locator('.supertext-languages').scrollIntoViewIfNeeded()
+await page.locator('.supertext-save-languages').click()
+await page.locator('.supertext-save-result').waitFor({ timeout: 30000 })
+await page.mouse.move(0, 0)
+await page.waitForTimeout(1000)
+await shot(page, 'status-languages.png', '.supertext-languages', 8)
 await page.close()
 await browser.close()

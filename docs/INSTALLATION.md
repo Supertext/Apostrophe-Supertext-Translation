@@ -33,17 +33,12 @@ The module registers Supertext as a **translation provider** for Apostrophe's ow
      shortName: 'my-site',
      modules: {
        // …
-       'supertext-apostrophe-translation': {
-         options: {
-           languages: {
-             de: { code: 'de-CH', politeness: 'more' },
-             fr: { code: 'fr-CH', politeness: 'more' }
-           }
-         }
-       }
+       'supertext-apostrophe-translation': {}
      }
    });
    ```
+
+   Choose each locale's Supertext language afterwards on the Supertext screen (see [Languages](#languages)).
 
 3. Set the API key as an environment variable (see [API key](#api-key)) and restart Apostrophe.
 
@@ -103,44 +98,61 @@ export default {
 };
 ```
 
-Every locale needs a **Supertext language**, set with the module option `languages`. The module never guesses a code: it uses
+Every locale needs a **Supertext language**. Administrators choose it in the admin bar under **Supertext → Languages**: one combo box per locale (all of the site's locales, the default locale included, because the same code is used when the locale is the source; as source, only its language is sent: `de-CH` → `de`). The combo box lists Supertext's target languages as *Name (code)*, the names in your interface language. Where Supertext offers formal and informal address for the chosen language (e.g. German, French, Italian, Spanish, Dutch, not English), a second combo box sets the **form of address**: *Default*, *Formal* or *Informal*. Click **Save languages**; the choice is stored in the database (Apostrophe's cache collection, without expiry) and applies at once, without a restart.
 
-1. the locale's `code` in `languages` (one code per locale, used both when the locale is the target and when it is the source; as source, only its language is sent: `de-CH` → `de`), else
+![The language section of the Supertext screen: English mapped to British English (en-GB) with the default form of address, Deutsch to Swiss High German (de-CH), Français to Swiss French (fr-CH) and Italiano to Italian (Switzerland) (it-CH), the last three formal, and the Save languages button with "Languages saved."](images/status-languages.png)
+
+The code used for a locale:
+
+1. the code saved on the Supertext screen (or set by the module option `languages`, which overrides the screen), else
 2. the locale name, if it is exactly one of Supertext's codes (case and `_`/`-` don't matter: `de_ch` = `de-CH`), else
-3. nothing: the locale is **unsupported**. Apostrophe's *Localize…* wizard then says automatic translation isn't available for it, and nothing is sent to Supertext.
+3. the default for the locale name, where one is obvious (see the table), else
+4. nothing: the locale is **unsupported**. Apostrophe's *Localize…* wizard then says automatic translation isn't available for it, and nothing is sent to Supertext.
 
-Supertext's codes: target languages are regional only for German, English, French, Italian and Portuguese (`de-CH`, `de-DE`, `en-GB`, `en-US`, `fr-CH`, `fr-FR`, `it-CH`, `it-IT`, `pt-BR`, `pt-PT`), with a script for Chinese and Serbian (`zh-Hans`, `zh-Hant`, `sr-Latn`, `sr-Cyrl`), `gsw-u-sd-chzh` / `gsw-u-sd-chbe` for Swiss German dialects, and bare for all others (`es`, `nl`, `sl`, `ja`, …). Source languages are bare (`en`, `de`). So the usual locales `de`, `fr`, `it`, `en` and `pt` need a mapping; `es` or `nl` work as they are.
+A combo box without a saved choice preselects the exact match or the default (marked *Default, not saved yet*); a locale with neither (e.g. `en-IE`, `de-LI`, `fr-BE`, `gsw`, `sr-RS`, `no`) shows *— choose —* and stays unsupported until you choose a language.
+
+| Locale name | Default Supertext language |
+| --- | --- |
+| `de`, `en`, `fr`, `it`, `pt` | `de-DE`, `en-US`, `fr-FR`, `it-IT`, `pt-PT` |
+| `zh`, `zh-CN`, `zh-SG` / `zh-TW`, `zh-HK`, `zh-MO` | `zh-Hans` / `zh-Hant` |
+| `sr`, `sr-Latn-RS` / `sr-Cyrl-RS` | `sr-Latn` / `sr-Cyrl` |
+| A region of a language Supertext offers without region (`es-ES`, `es-419`, `nl-NL`, `nb-NO`) | the language (`es`, `nl`, `nb`) |
+| Anything else without an exact match (`en-IE`, `de-LI`, `de-AT`, `fr-BE`, `gsw`, `no`) | none: choose one |
+
+Supertext's codes: target languages are regional only for German, English, French, Italian and Portuguese (`de-CH`, `de-DE`, `en-GB`, `en-US`, `fr-CH`, `fr-FR`, `it-CH`, `it-IT`, `pt-BR`, `pt-PT`), with a script for Chinese and Serbian (`zh-Hans`, `zh-Hant`, `sr-Latn`, `sr-Cyrl`), `gsw-u-sd-chzh` / `gsw-u-sd-chbe` for Swiss German dialects, and bare for all others (`es`, `nl`, `sl`, `ja`, …). Source languages are bare (`en`, `de`). The server accepts only these codes when you save.
+
+**Override for automated setups.** The module option `languages` sets locales in code; a locale listed there wins over the screen, whose combo boxes for it are then read-only and say *Set by the module option languages*. Codes in the option are sent as they are (the screen marks one Supertext doesn't list).
 
 ```js
 // app.js
 'supertext-apostrophe-translation': {
   options: {
     languages: {
-      en: { code: 'en-GB' },                       // British English as target
       de: { code: 'de-CH', politeness: 'more' },   // Swiss German, formal (Sie)
-      fr: { code: 'fr-CH', politeness: 'more' },   // Swiss French, formal (vous)
       it: 'it-CH'                                  // short form: just the code
     }
   }
 }
 ```
 
-`politeness` is `more` (formal), `less` (informal) or left out (Supertext's default). It is only sent for languages where Supertext offers formal and informal address (e.g. German, French, Italian, Spanish, Dutch); for others (e.g. English) it is ignored, and the status screen says so.
+`politeness` is `more` (formal), `less` (informal) or left out (Supertext's default). It is only sent for languages where Supertext offers formal and informal address; for others it is ignored, and the status screen says so.
 
-The Supertext status screen lists every locale with the Supertext language and form of address it uses, and marks locales without a Supertext language (*No Supertext language*, or *Source only* for a locale like `en` that works as source but needs a code to be translated into) and codes that aren't in Supertext's list. The `check` task prints the same per locale. Editors pick locales in the *Localize…* wizard:
+**Upgrading from 0.1.0:** a mapping you set with the `languages` option keeps working unchanged (it is the override now). To manage those locales on the screen instead, remove them from the option and restart; the screen then preselects the default until you save.
+
+The `check` task prints the code per locale (marked *(default)* or *(module option languages)*). Editors pick locales in the *Localize…* wizard:
 
 ![The locale menu in Apostrophe's admin bar, listing English, Deutsch, Français and Italiano, each marked as existing for the current page](images/locales.png)
 
 ## Settings
 
-All settings are options of the `supertext-apostrophe-translation` module in `app.js`.
+All settings are options of the `supertext-apostrophe-translation` module in `app.js`, except the language mapping, which administrators set on the Supertext screen (**Supertext → Languages**; the option `languages` can override it).
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `apiKey` | `''` | Supertext API key. The environment variable `SUPERTEXT_API_KEY` takes precedence. |
 | `environment` | `'live'` | Supertext API environment: `live` (`https://api.supertext.com/v1/`), `staging` or `testing`. |
 | `apiUrl` | `''` | Custom API address (overrides `environment`). The environment variable `SUPERTEXT_API_URL` takes precedence. Only for tests against a stand-in. |
-| `languages` | `{}` | The language mapping, per locale: `{ code, politeness }` or just the code (`'de-CH'`). `code` is the Supertext language (used as target and, without region, as source); without it the locale name must be exactly a Supertext code, otherwise the locale is unsupported (see [Languages](#languages)). `politeness` is `more` (formal), `less` (informal) or left out (Supertext's default); only sent where Supertext offers it. |
+| `languages` | `{}` | Optional override of the mapping chosen on the Supertext screen (for automated setups), per locale: `{ code, politeness }` or just the code (`'de-CH'`). A locale listed here wins over the screen (see [Languages](#languages)). `code` is the Supertext language (used as target and, without region, as source); `politeness` is `more` (formal), `less` (informal) or left out (Supertext's default); only sent where Supertext offers it. |
 | `versionReports` | `true` | *Send version information to Supertext* (see [Version reports](#version-reports-commando-center)). The environment variable `SUPERTEXT_VERSION_REPORTS=0` turns it off (and `=1` on), whatever the option says. |
 | `translateSlugs` | `true` | New localizations get a slug made from the translated title (`/swiss-chocolate` → `/de/schweizer-schokolade…`). Re-translating keeps the slug the localized document already has. Set to `false` to keep Apostrophe's default (the source slug). |
 | `skipWidgets` | `['@apostrophecms/html']` | Widget types that are never translated. |
@@ -151,9 +163,9 @@ To keep a field of your own schema out of translation, add `translate: false` to
 
 ### Status screen
 
-Administrators (users who may edit users, i.e. the *admin* role) see **Supertext** in the admin bar. It shows the module version (linked to its release notes), where the API key comes from, the API address, whether automatic translation is active in *Localize…*, the result of the last **API key check** with its time, whether version information is sent to Supertext, the ping address, the account and API key links, a **Test connection** button and the language table (Supertext language and form of address per locale, unmapped locales marked):
+Administrators (users who may edit users, i.e. the *admin* role) see **Supertext** in the admin bar. It shows the module version (linked to its release notes), where the API key comes from, the API address, whether automatic translation is active in *Localize…*, the result of the last **API key check** with its time, whether version information is sent to Supertext, the ping address, the account and API key links, a **Test connection** button and the **Languages** section (a combo box with the Supertext language and, where offered, the form of address per locale, and **Save languages**; see [Languages](#languages)):
 
-![The Supertext status screen: version 0.1.0, API key set from the environment variable, API address https://api.supertext.com/v1/, automatic translation on, API key check "the connection to Supertext works" with its time, version information on with its explanation, the ping address, a successful connection test and the language table with en-GB, de-CH, fr-CH and it-CH, the last three in formal address](images/status.png)
+![The Supertext status screen: version 0.1.0, API key set from the environment variable, API address https://api.supertext.com/v1/, automatic translation on, API key check "the connection to Supertext works" with its time, version information on with its explanation, the ping address, a successful connection test and the start of the Languages section with combo boxes for English (en-GB) and Deutsch (de-CH, formal)](images/status.png)
 
 ### API key check
 
@@ -214,9 +226,10 @@ node app supertext-apostrophe-translation:translate --slug=handmade-in-bern --ty
 | --- | --- |
 | *Translate text content* doesn't appear in *Localize…* | No API key: set `SUPERTEXT_API_KEY` and restart. The startup log says `[supertext] No Supertext API key`. Also check that the assets were rebuilt after installing. |
 | *Supertext rejected the API key. Please check it.* | The key is wrong or was revoked. No Supertext account yet? Create one at <https://www.supertext.com/person/en/account/signin>. Generate your API key at supertext.com → Integrations → API (requires the Admin role): <https://www.supertext.com/en/integrations/api>. |
-| *The locale … has no Supertext language* (`unsupported_language`) | The locale has no `code` in `languages` and its name isn't exactly a Supertext code (e.g. `de`, which Supertext only accepts as `de-CH` or `de-DE`). Add it: `languages: { de: { code: 'de-CH' } }` and restart. The status screen marks such locales; the *Localize…* wizard says automatic translation isn't available for them. |
-| *Supertext offers no formal or informal address for …* (`unsupported_feature`) | Supertext refused the form of address for that language. Remove its `politeness` from `languages`. |
-| *Supertext doesn't translate this language pair* | The mapped code isn't a Supertext code (e.g. `es-ES` instead of `es`; the status screen says *Not in Supertext's list*). Fix the `code`. |
+| *The locale … has no Supertext language* (`unsupported_language`) | The locale has no saved Supertext language, its name isn't a Supertext code and there is no default for it (e.g. `en-IE`, `de-LI`, `gsw`). Choose one under **Supertext → Languages** and click **Save languages**. The screen shows *— choose —* and *No Supertext language* for such locales; the *Localize…* wizard says automatic translation isn't available for them. |
+| *Not saved: invalid Supertext language for …* | Only Supertext's codes and the site's locales can be saved; reload the screen (the locales may have changed) and choose again. |
+| *Supertext offers no formal or informal address for …* (`unsupported_feature`) | Supertext refused the form of address for that language. Set it to *Default* on the screen, or remove its `politeness` from the `languages` option. |
+| *Supertext doesn't translate this language pair* | A code set with the `languages` option isn't a Supertext code (e.g. `es-ES` instead of `es`; the status screen says *Not in Supertext's list*). Fix the `code`, or remove the locale from the option and choose it on the screen. |
 | Status screen: *Supertext rejected the API key …* (key check *invalid*) | As for *Supertext rejected the API key. Please check it.* below; after fixing the key, restart and click **Test connection**. |
 | Status screen: *… because Supertext can't be reached* (key check *unreachable*) | The server can't reach `api.supertext.com`; translations will fail too. Check firewall, proxy and DNS, then **Test connection**. |
 | Status screen: *Supertext answered with an error (HTTP …)* | Supertext had a problem; try **Test connection** later. Contact support@supertext.com if it persists. |

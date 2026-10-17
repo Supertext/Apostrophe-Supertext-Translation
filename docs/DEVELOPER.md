@@ -11,7 +11,7 @@ index.js                     the module: provider, status screen, API routes, ta
 lib/sdk.js                   loads the vendored Supertext SDK (its v1 API: client, API key check); API addresses per environment
 lib/document.js              text units: one per plain-text field, one per rich-text paragraph
 lib/collect.js               field rules: finds the texts of a document by its schema
-lib/translate.js             language codes (the languages option), form of address, sends units through the SDK
+lib/translate.js             language codes (saved mapping + languages option), validation, form of address, sends units through the SDK
 lib/reporting.js             Commando Center glue: version reports, API key check, ping (Plugin Health's InstallationReporter)
 vendor/supertext-sdk/        the Supertext TypeScript SDK (built JavaScript), copied by scripts/vendor-sdk.sh
 vendor/supertext-plugin-health/  Supertext Plugin Health (built JavaScript), copied by scripts/vendor-plugin-health.sh
@@ -19,7 +19,7 @@ scripts/vendor-sdk.sh          updates vendor/supertext-sdk from the SDK reposit
 scripts/vendor-plugin-health.sh  updates vendor/supertext-plugin-health from the Commando Center repository
 i18n/supertext/<lang>.json   UI strings (en, de, fr, it), namespace "supertext"
 i18n/apostrophe/<lang>.json  overrides Apostrophe's automaticTranslationDisclaimer
-ui/apos/components/SupertextStatusModal.vue   admin status screen
+ui/apos/components/SupertextStatusModal.vue   admin status screen with the language combo boxes
 test/                        unit tests (node --test), no Apostrophe needed
 tests/docs/                  stand-in API, sample translations, screenshot script
 tests/demo-check.sh          CI check of the demo image
@@ -108,14 +108,15 @@ AI file translation API v1, the same as the WordPress plugin. The SDK does all o
 
 ### Language codes (`lib/translate.js`)
 
-**No guessing, no default regions.** Supertext accepts only the codes its `GET features` lists (the SDK's `Languages`, `vendor/supertext-sdk/v1/languages.js`; spec `spec/languages.json` in the SDK repository): 28 bare sources (`en`, `de`, …); 37 targets, regional only for de/en/fr/it/pt (`de-CH`, `en-US`, `pt-BR`), with a script for zh/sr (`zh-Hans`, `sr-Latn`), `gsw-u-sd-chzh` / `gsw-u-sd-chbe`, bare for all others (`es`, `nl`, `sl`). Anything else: HTTP 404 `INVALID_LANGUAGE_PAIR`. Politeness on a target without it (en, gsw, rm, sq, sr): HTTP 400 `FEATURE_ERROR`.
+**Defaults only where obvious.** Supertext accepts only the codes its `GET features` lists (the SDK's `Languages`, `vendor/supertext-sdk/v1/languages.js`; spec `spec/languages.json` in the SDK repository): 28 bare sources (`en`, `de`, …); 37 targets, regional only for de/en/fr/it/pt (`de-CH`, `en-US`, `pt-BR`), with a script for zh/sr (`zh-Hans`, `sr-Latn`), `gsw-u-sd-chzh` / `gsw-u-sd-chbe`, bare for all others (`es`, `nl`, `sl`). Anything else: HTTP 404 `INVALID_LANGUAGE_PAIR`. Politeness on a target without it (en, gsw, rm, sq, sr): HTTP 400 `FEATURE_ERROR`.
 
-- The mapping is the module option `languages` (`{ de: { code: 'de-CH', politeness: 'more' } }`, or `{ de: 'de-CH' }`), turned into the SDK's `LanguageMapping` by `mapping()`. One mapping serves both directions.
-- `targetCode(locale, languages)` = `Languages.target(locale, mapping)`: the mapped code (sent as it is), else an exact match of the locale name (case and `_`/`-` ignored: `de_ch` → `de-CH`), else `SupertextError('unsupported_language')`.
+- The mapping is chosen on the status screen: one `AposSelect` per locale (all of `apos.i18n.locales`) with `Languages.targetOptions()` as *Name (code)* (the name from `Intl.DisplayNames` in the admin's language, Supertext's English name for the `gsw-u-sd-…` dialects and as fallback), preselected with the saved code, else `Languages.suggestTarget(locale)`, else *— choose —* (`''`), plus a form-of-address select where `supportsPoliteness`. `POST …/languages` (administrators; Apostrophe's CSRF check applies to every session POST, `apos.http.post` handles it) stores `{ <locale>: { code, politeness } }` in `aposCache` (namespace `supertext-apostrophe-translation`, key `languages`, no expiry) after `validateLanguages()`: only the site's locales, only Supertext's target codes, `''` not stored (the default applies), politeness stored as `default` where not offered; anything else → HTTP 400 `invalid` with `supertext:languagesInvalid`.
+- The module option `languages` (`{ de: { code: 'de-CH', politeness: 'more' } }`, or `{ de: 'de-CH' }`) overrides the saved mapping per locale (`mergeLanguages()`; those selects are read-only, `overridden`). The result is turned into the SDK's `LanguageMapping` by `mapping()`. One mapping serves both directions. Upgrading from 0.1.0 needs no migration: the option, then the only mapping, keeps working as the override.
+- `targetCode(locale, languages)` = `Languages.target(locale, mapping)`: the mapped code (sent as it is), else an exact match of the locale name (case and `_`/`-` ignored: `de_ch` → `de-CH`), else the SDK's default (`de` → `de-DE`, `en` → `en-US`, `fr` → `fr-FR`, `it` → `it-IT`, `pt` → `pt-PT`, `zh` → `zh-Hans`, `sr` → `sr-Latn`, `zh-TW` → `zh-Hant`, `es-ES` → `es`, …), else `SupertextError('unsupported_language')` (`en-IE`, `de-LI`, `gsw`, `sr-RS` need a mapping).
 - `sourceCode(locale, languages)` = `Languages.source(locale, mapping)`: the mapped code's language (`de-CH` → `de`), else the locale's language if Supertext offers it as source, else `unsupported_language`.
 - `translateUnits()` resolves both codes before calling the client, so an unsupported locale sends nothing.
 - `politeness()` sends the configured `more` / `less` only when `Languages.supportsPoliteness(target)` is true; otherwise nothing.
-- `languageStatus()` is what the status screen, `getSupportedLanguages()` and the `check` task show per locale: code (or none), mapped, `known` (in Supertext's list; a mapped code that isn't is still sent, and Supertext then answers `invalid_language_pair`), source code, form of address and `politenessIgnored`.
+- `languageStatus()` is what the status screen, `getSupportedLanguages()` and the `check` task show per locale: code (or none), mapped, `known` (in Supertext's list; a mapped code that isn't is still sent, and Supertext then answers `invalid_language_pair`), `defaulted` (the code is the SDK's default), `suggestion` (what the select preselects), source code, form of address and `politenessIgnored`. The status route adds `label`, `overridden`, `saved`, `selected` and `selectedPoliteness` per locale and `targetOptions`.
 
 The stand-in (`tests/docs/stand-in.mjs`) rejects bare targets and regional sources like the real API.
 
@@ -164,8 +165,8 @@ The stand-in (`tests/docs/stand-in.mjs`) answers like the Supertext API: texts f
 
 ## Tests
 
-- `npm test`: unit tests for the text units (rich text split into paragraphs, formatting and links kept), the field rules and the translation through a fake client, the vendored SDK (it loads, sends the auth header, the language codes and deletes the file), the vendored Plugin Health copy (it loads, keeps state stored by the old SDK reporter), the language mapping (no guessing, `unsupported_language` sends nothing, politeness only where offered), the Commando Center glue with a fake transport and the UI strings (every language has the same keys, placeholders and URLs as English). The SDK's own tests and conformance scenarios run in the SDK repository, Plugin Health's in the Commando Center repository.
-- `tests/demo-check.sh` (CI): builds on the demo image, starts it twice against PostgreSQL and the stand-in, checks the demo accounts (created once, never duplicated, no password in the log), runs `check` (key check and a version report to the stand-in), checks the public ping, translates the sample page and article with the `translate` task into de/fr/it, checks that a second run skips existing locales, and reads the German page and Italian article back through Apostrophe's REST API as the editor.
+- `npm test`: unit tests for the text units (rich text split into paragraphs, formatting and links kept), the field rules and the translation through a fake client, the vendored SDK (it loads, sends the auth header, the language codes and deletes the file), the vendored Plugin Health copy (it loads, keeps state stored by the old SDK reporter), the language mapping (mapping → exact match → SDK default → `unsupported_language`, which sends nothing; the option overriding the saved mapping; server-side validation of what the screen saves; politeness only where offered), the Commando Center glue with a fake transport and the UI strings (every language has the same keys, placeholders and URLs as English). The SDK's own tests and conformance scenarios run in the SDK repository, Plugin Health's in the Commando Center repository.
+- `tests/demo-check.sh` (CI): builds on the demo image, starts it twice against PostgreSQL and the stand-in, checks the demo accounts (created once, never duplicated, no password in the log), runs `check` (key check and a version report to the stand-in), checks the public ping, the language route (editors get 403, invalid codes or locales 400, the status lists the saved choice and Supertext's codes), translates the sample page and article with the `translate` task into de/fr/it, checks that a second run skips existing locales, and reads the German page and Italian article back through Apostrophe's REST API as the editor.
 
 ```bash
 docker build -f demo/Dockerfile -t supertext-apostrophe-demo .
@@ -177,15 +178,15 @@ The script drops nothing: run it against a fresh database (it uses `supertext_ap
 
 ## Docs screenshots
 
-`npm run docs:screenshots` (script `tests/docs/screenshots.mjs`, Playwright) logs in to a **fresh** demo (nothing localized yet) whose module talks to the stand-in, localizes the sample page as the editor and captures the wizard, the German result and the status screen as the administrator. Set `BASE_URL` and the `DEMO_*` accounts; `CHROMIUM_PATH` if Playwright's own browser isn't installed. The status screenshot shows the live API address instead of the stand-in's and `https://www.example.ch` in the ping address. Point the demo's `SUPERTEXT_REPORT_URL` at the stand-in. `RESUME=1` skips the first localization (for a demo that has it already). Regenerate the images whenever the UI they show changes.
+`npm run docs:screenshots` (script `tests/docs/screenshots.mjs`, Playwright) logs in to a **fresh** demo (nothing localized yet) whose module talks to the stand-in, localizes the sample page as the editor and captures the wizard, the German result, the status screen and its language section (after **Save languages**) as the administrator. Set `BASE_URL` and the `DEMO_*` accounts; `CHROMIUM_PATH` if Playwright's own browser isn't installed. The status screenshot shows the live API address instead of the stand-in's and `https://www.example.ch` in the ping address. Point the demo's `SUPERTEXT_REPORT_URL` at the stand-in. `RESUME=1` skips the first localization (for a demo that has it already). Regenerate the images whenever the UI they show changes.
 
 ## Demo
 
-`demo/` is the public demo on Railway (project *supertext-cms-demos*, service *Apostrophe*, <https://apostrophe-production-986f.up.railway.app>): Apostrophe's essentials starter kit (MIT, see `demo/LICENSE-starter-kit`) with four locales (en, de, fr, it), a simple layout with a language switcher, an *article* piece type and this module (`languages`: `en-GB`, and `de-CH`, `fr-CH`, `it-CH` formal).
+`demo/` is the public demo on Railway (project *supertext-cms-demos*, service *Apostrophe*, <https://apostrophe-production-986f.up.railway.app>): Apostrophe's essentials starter kit (MIT, see `demo/LICENSE-starter-kit`) with four locales (en, de, fr, it), a simple layout with a language switcher, an *article* piece type and this module (no `languages` option: the mapping `en-GB`, and `de-CH`, `fr-CH`, `it-CH` formal, is saved by `supertext-demo:setup` like the Supertext screen does, so the combo boxes stay editable).
 
 - `demo/Dockerfile` (build context: repository root) installs the demo with the module copied in and builds the admin assets.
 - `demo/docker/entrypoint.sh` creates the demo's own database `APOSTROPHE_DB_NAME` (default `supertext_apostrophe`) on the Postgres server in `DATABASE_URL` if needed, runs Apostrophe's migrations and `supertext-demo:setup`, then starts Apostrophe. `demo/app.js` derives `APOS_DB_URI` from the same variables, so `docker exec demo node app <task>` works too.
-- `demo/modules/supertext-demo` (`setup` task) runs on every start and only creates what's missing: the demo accounts, the English home page text, the sample page *Swiss chocolate, shipped worldwide* and the sample article *Handmade in Bern*, all published.
+- `demo/modules/supertext-demo` (`setup` task) runs on every start and only creates what's missing: the demo accounts, the English home page text, the sample page *Swiss chocolate, shipped worldwide* and the sample article *Handmade in Bern*, all published, and the Supertext language mapping (only when none is saved, so choices made on the screen survive restarts).
 
 ### Demo accounts
 

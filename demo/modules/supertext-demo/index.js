@@ -1,6 +1,7 @@
 // Supertext demo setup, run on every start (`node app supertext-demo:setup`). Only adds what
-// is missing: the DEMO_ADMIN / DEMO_EDITOR accounts, the English sample pages and the sample
-// article. Existing accounts and content are never changed. Passwords are never printed.
+// is missing: the DEMO_ADMIN / DEMO_EDITOR accounts, the English sample pages, the sample
+// article and the Supertext language mapping. Existing accounts, content and a mapping saved
+// on the Supertext screen are never changed. Passwords are never printed.
 
 // Areas and widgets need their own ids.
 const richText = (apos, content) => ({
@@ -27,12 +28,29 @@ export default {
           const log = (message) => console.log(`[demo] ${message}`);
           await self.ensureAccounts(log);
           await self.ensureContent(log);
+          await self.ensureLanguages(log);
         }
       }
     };
   },
   methods(self) {
     return {
+      // Swiss variants, formal address: what the Supertext screen shows on a new demo.
+      async ensureLanguages(log) {
+        const supertext = self.apos.modules['supertext-apostrophe-translation'];
+        if (Object.keys(await supertext.storedLanguages()).length) {
+          log('Supertext languages: already saved, left unchanged.');
+          return;
+        }
+        await supertext.saveLanguages({
+          en: { code: 'en-GB' },
+          de: { code: 'de-CH', politeness: 'more' },
+          fr: { code: 'fr-CH', politeness: 'more' },
+          it: { code: 'it-CH', politeness: 'more' }
+        });
+        log('Supertext languages: saved en-GB, de-CH, fr-CH, it-CH.');
+      },
+
       async ensureAccounts(log) {
         const req = self.apos.task.getReq();
         for (const [ prefix, role ] of [ [ 'DEMO_ADMIN', 'admin' ], [ 'DEMO_EDITOR', 'editor' ] ]) {

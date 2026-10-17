@@ -53,17 +53,9 @@ apostrophe({
     'default-page': {},
     article: {},
     'supertext-demo': {},
-    'supertext-apostrophe-translation': {
-      options: {
-        // Supertext language per locale (the same code serves as source and target).
-        languages: {
-          en: { code: 'en-GB' },
-          de: { code: 'de-CH', politeness: 'more' },
-          fr: { code: 'fr-CH', politeness: 'more' },
-          it: { code: 'it-CH', politeness: 'more' }
-        }
-      }
-    },
+    // The Supertext language of each locale is chosen on the Supertext screen (admin bar);
+    // supertext-demo:setup preselects en-GB and de-CH, fr-CH, it-CH (formal) on a new database.
+    'supertext-apostrophe-translation': {},
     'nested-layout-widget': {},
     'nested-column-widget': {}
   }

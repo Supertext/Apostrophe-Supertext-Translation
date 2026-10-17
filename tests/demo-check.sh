@@ -27,6 +27,7 @@ start
 start   # second start: nothing duplicated or changed
 logs=$(docker logs demo 2>&1)
 grep -qF 'DEMO_EDITOR: account exists, left unchanged' <<< "$logs"
+grep -qF 'Supertext languages: already saved, left unchanged' <<< "$logs"
 if grep -qF -e "$DEMO_ADMIN_PASSWORD" -e "$DEMO_EDITOR_PASSWORD" <<< "$logs"; then echo "A password appeared in the log"; exit 1; fi
 echo "accounts OK"
 
@@ -69,4 +70,16 @@ grep -qF 'https://www.supertext.com' <<< "$page"
 article=$(curl -sf -H "$auth" "$B/api/v1/article?aposLocale=it&aposMode=draft")
 grep -qF 'Realizzato a mano a Berna' <<< "$article"
 grep -qF '<em>scatola di degustazione</em>' <<< "$article"
+# The language mapping (Supertext screen): administrators only, codes checked server-side.
+admin=$(curl -sf -H 'Content-Type: application/json' \
+	-d "{\"username\":\"$DEMO_ADMIN_EMAIL\",\"password\":\"$DEMO_ADMIN_PASSWORD\"}" \
+	"$B/api/v1/@apostrophecms/login/login" | node -pe 'JSON.parse(require("fs").readFileSync(0)).token')
+post() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $1" -H 'Content-Type: application/json' -d "$2" "$B/api/v1/supertext-apostrophe-translation/languages"; }
+test "$(post "$token" '{"languages":{"de":{"code":"de-DE"}}}')" = 403
+test "$(post "$admin" '{"languages":{"de":{"code":"de"}}}')" = 400
+test "$(post "$admin" '{"languages":{"xx":{"code":"de-CH"}}}')" = 400
+status=$(curl -sf -H "Authorization: Bearer $admin" "$B/api/v1/supertext-apostrophe-translation/status")
+grep -qF '"selected":"de-CH"' <<< "$status"
+grep -qF '"code":"gsw-u-sd-chzh"' <<< "$status"
+echo "Language mapping OK"
 echo "Demo check passed"

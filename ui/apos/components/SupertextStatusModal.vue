@@ -123,40 +123,86 @@
             <h3 class="supertext-status__heading">
               {{ $t('supertext:languages') }}
             </h3>
-            <table class="supertext-status__table">
-              <thead>
-                <tr>
-                  <th>{{ $t('supertext:locale') }}</th>
-                  <th>{{ $t('supertext:supertextLanguage') }}</th>
-                  <th>{{ $t('supertext:formOfAddress') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="language in status.languages"
-                  :key="language.locale"
-                >
-                  <td>{{ language.label }} <span class="supertext-status__muted">({{ language.locale }})</span></td>
-                  <td>
-                    <template v-if="language.code">
-                      <code>{{ language.code }}</code>
-                      <span
-                        v-if="!language.known"
-                        class="supertext-status__warn supertext-status__block"
-                      >{{ $t('supertext:notInList') }}</span>
-                    </template>
-                    <span
-                      v-else
-                      class="supertext-status__warn supertext-unmapped"
-                    >{{ $t(language.source ? 'supertext:sourceOnly' : 'supertext:notMapped') }}</span>
-                  </td>
-                  <td>{{ $t(language.politenessIgnored ? 'supertext:politenessNotOffered' : addressKey(language.politeness)) }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <p class="supertext-status__muted supertext-status__help">
+            <p class="supertext-status__muted supertext-status__help supertext-status__lead">
               {{ $t('supertext:mappingHelp') }}
             </p>
+            <form
+              class="supertext-languages"
+              @submit.prevent="saveLanguages"
+            >
+              <table class="supertext-status__table">
+                <thead>
+                  <tr>
+                    <th>{{ $t('supertext:locale') }}</th>
+                    <th>{{ $t('supertext:supertextLanguage') }}</th>
+                    <th>{{ $t('supertext:formOfAddress') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="language in status.languages"
+                    :key="language.locale"
+                    :class="`supertext-language--${language.locale}`"
+                  >
+                    <td>{{ language.label }} <span class="supertext-status__muted">({{ language.locale }})</span></td>
+                    <td>
+                      <AposSelect
+                        class="supertext-language-code"
+                        :choices="codeChoices"
+                        :selected="form[language.locale].code"
+                        :disabled="language.overridden || saving"
+                        @change="(value) => setCode(language.locale, value)"
+                      />
+                      <span
+                        v-if="language.overridden"
+                        class="supertext-status__muted supertext-status__block"
+                      >{{ $t('supertext:overridden') }}</span>
+                      <span
+                        v-else-if="!form[language.locale].code"
+                        class="supertext-status__warn supertext-status__block supertext-unmapped"
+                      >{{ $t(language.source ? 'supertext:sourceOnly' : 'supertext:notMapped') }}</span>
+                      <span
+                        v-else-if="!language.saved && form[language.locale].code === language.suggestion"
+                        class="supertext-status__muted supertext-status__block"
+                      >{{ $t('supertext:suggested') }}</span>
+                      <span
+                        v-if="language.overridden && language.code && !language.known"
+                        class="supertext-status__warn supertext-status__block"
+                      >{{ $t('supertext:notInList') }}</span>
+                    </td>
+                    <td>
+                      <AposSelect
+                        v-if="offersPoliteness(form[language.locale].code)"
+                        class="supertext-language-politeness"
+                        :choices="politenessChoices"
+                        :selected="form[language.locale].politeness"
+                        :disabled="language.overridden || saving"
+                        @change="(value) => form[language.locale].politeness = value"
+                      />
+                      <span v-else-if="language.politenessIgnored">{{ $t('supertext:politenessNotOffered') }}</span>
+                      <span
+                        v-else
+                        class="supertext-status__muted"
+                      >{{ $t('supertext:defaultAddress') }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="supertext-status__test">
+                <AposButton
+                  type="primary"
+                  class="supertext-save-languages"
+                  :label="saving ? 'supertext:saving' : 'supertext:saveLanguages'"
+                  :disabled="saving"
+                  @click="saveLanguages"
+                />
+                <span
+                  v-if="saveResult"
+                  class="supertext-save-result"
+                  :class="saveResult.ok ? 'supertext-status__ok' : 'supertext-status__warn'"
+                >{{ saveResult.message }}</span>
+              </div>
+            </form>
           </div>
           <p
             v-else-if="error"
@@ -192,7 +238,10 @@ export default {
       keyCheck: null,
       error: null,
       testing: false,
-      result: null
+      result: null,
+      form: {},
+      saving: false,
+      saveResult: null
     };
   },
   computed: {
@@ -207,18 +256,112 @@ export default {
         return this.$t('supertext:keyFromOption');
       }
       return this.$t('supertext:keyMissing');
+    },
+    // Supertext's target codes, "Name (code)" with the name in the interface language where
+    // the browser knows it (Intl.DisplayNames), sorted by that name.
+    codeChoices() {
+      const lang = document.documentElement.lang || undefined;
+      let names = null;
+      try {
+        names = new Intl.DisplayNames(lang ? [ lang ] : undefined, {
+          type: 'language',
+          fallback: 'none'
+        });
+      } catch (e) {
+        names = null;
+      }
+      const label = (option) => {
+        let name = null;
+        // Dialect codes (gsw-u-sd-…) would lose the dialect: keep Supertext's name.
+        if (names && !option.code.includes('-u-')) {
+          try {
+            name = names.of(option.code);
+          } catch (e) {
+            name = null;
+          }
+        }
+        return `${name || option.name} (${option.code})`;
+      };
+      const choices = (this.status?.targetOptions || [])
+        .map((option) => ({
+          label: label(option),
+          value: option.code
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, lang));
+      return [ {
+        label: this.$t('supertext:choose'),
+        value: ''
+      }, ...choices ];
+    },
+    politenessChoices() {
+      return [
+        {
+          label: this.$t('supertext:defaultAddress'),
+          value: 'default'
+        },
+        {
+          label: this.$t('supertext:formal'),
+          value: 'more'
+        },
+        {
+          label: this.$t('supertext:informal'),
+          value: 'less'
+        }
+      ];
     }
   },
   async mounted() {
     this.modal.active = true;
     try {
-      this.status = await apos.http.get(`${this.action}/status`, { busy: true });
+      this.setStatus(await apos.http.get(`${this.action}/status`, { busy: true }));
       this.keyCheck = this.status.keyCheck;
     } catch (e) {
       this.error = e.body?.message || e.message || String(e);
     }
   },
   methods: {
+    setStatus(status) {
+      this.status = status;
+      this.form = Object.fromEntries(status.languages.map((language) => [ language.locale, {
+        code: language.selected || '',
+        politeness: language.selectedPoliteness || 'default'
+      } ]));
+    },
+    offersPoliteness(code) {
+      return Boolean(code && (this.status.targetOptions || []).find((option) => option.code === code)?.politeness);
+    },
+    setCode(locale, code) {
+      this.form[locale].code = code;
+      if (!this.offersPoliteness(code)) {
+        this.form[locale].politeness = 'default';
+      }
+    },
+    async saveLanguages() {
+      this.saving = true;
+      this.saveResult = null;
+      const languages = {};
+      for (const language of this.status.languages) {
+        if (!language.overridden) {
+          languages[language.locale] = { ...this.form[language.locale] };
+        }
+      }
+      try {
+        const keyCheck = this.keyCheck;
+        this.setStatus(await apos.http.post(`${this.action}/languages`, { body: { languages } }));
+        this.keyCheck = keyCheck;
+        this.saveResult = {
+          ok: true,
+          message: this.$t('supertext:languagesSaved')
+        };
+      } catch (e) {
+        this.saveResult = {
+          ok: false,
+          message: e.body?.message || e.message || String(e)
+        };
+      } finally {
+        this.saving = false;
+      }
+    },
     close() {
       this.modal.showModal = false;
     },
@@ -345,6 +488,18 @@ export default {
 .supertext-status__help {
   margin: 12px 0 0;
   line-height: 1.5;
+}
+
+.supertext-status__lead {
+  margin: 0 0 12px;
+}
+
+.supertext-status__table td {
+  vertical-align: top;
+}
+
+.supertext-language-code {
+  min-width: 260px;
 }
 
 .supertext-status__muted {
