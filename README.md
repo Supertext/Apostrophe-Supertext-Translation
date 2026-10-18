@@ -19,6 +19,21 @@ Translates titles and text fields, rich text (a paragraph at a time, with format
 
 **Requirements:** ApostropheCMS 4.13+ on Node.js 22.12+, a Supertext account and an API key, set as `SUPERTEXT_API_KEY`. No Supertext account yet? [Create one at supertext.com](https://www.supertext.com/person/en/account/signin). Generate your API key at supertext.com → [Integrations → API](https://www.supertext.com/en/integrations/api) (requires the Admin role).
 
+## Export for translation and import (XLIFF and HTML)
+
+Besides translating with Supertext AI, you can export a page or piece as a file, have it translated elsewhere and import the result.
+
+- **Where:** *Export for translation* and *Import translation* in the More Options menu of every page and piece, next to *Localize…*.
+- **Formats:** XLIFF 1.2 for translation tools such as Trados, memoQ or Phrase (formatting travels as protected tags; several target languages in one file), or HTML (one language per file) for translators or Supertext's web app, which keeps the file's head and `data-st-id` attributes, so the translated file imports as it is.
+- **Import:** the file says what it was exported from and for which language. The translations are written with the same rules as a Supertext AI translation, and a summary shows what was imported and what was skipped: source changed since the export (import those anyway with *Also import texts whose source changed since the export*), not translated, formatting changed, not in the file.
+- **Safe:** files over 10 MB, files from another system and translations that add markup the source doesn't have are refused; uploaded files aren't stored.
+
+![Export for translation: file format (XLIFF 1.2 or HTML) and target languages](docs/images/export-dialog.png)
+
+![The import summary: imported texts and the ones skipped and why](docs/images/import-summary.png)
+
+Details: [user guide](docs/USER_GUIDE.md#translate-with-a-file-xliff-or-html).
+
 ## Guides
 
 - [Installation guide](docs/INSTALLATION.md): requirements, install, API key, languages, all settings, troubleshooting
