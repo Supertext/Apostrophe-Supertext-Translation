@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { collectUnits } = require('../lib/collect');
-const { translateUnits, languageStatus, mapping, mergeLanguages, politeness, sourceCode, targetCode, targetOrNull, validateLanguages } = require('../lib/translate');
+const { translateUnits, languageStatus, mapping, mergeLanguages, politeness, reviewFor, sourceCode, targetCode, targetOrNull, validateLanguages } = require('../lib/translate');
 const { SupertextError } = require('../lib/sdk');
 
 const schema = [
@@ -104,7 +104,30 @@ test('mergeLanguages: the module option wins per locale', () => {
     it: 'it-CH'
   });
   assert.deepEqual(merged.overridden.sort(), [ 'de', 'it' ]);
-  assert.deepEqual(mergeLanguages(undefined, undefined), { languages: {}, overridden: [] });
+  assert.deepEqual(mergeLanguages(undefined, undefined), { languages: {}, overridden: [], reviewOverridden: [] });
+});
+
+test('mergeLanguages: Translation review from the screen, the module option wins', () => {
+  const merged = mergeLanguages(
+    { de: { code: 'de-DE', review: true }, fr: { code: 'fr-CH', review: true }, it: { code: '', review: true }, nl: { code: '', review: false } },
+    { de: { code: 'de-CH' }, fr: { review: false }, es: { review: true } }
+  );
+  assert.deepEqual(merged.languages, {
+    // The option sets the code; review stays the screen's.
+    de: { code: 'de-CH', review: true },
+    fr: { code: 'fr-CH', review: false },
+    // Review without a Supertext language of its own (the default code applies).
+    it: { code: '', review: true },
+    es: { review: true }
+  });
+  assert.deepEqual(merged.overridden, [ 'de' ]);
+  assert.deepEqual(merged.reviewOverridden.sort(), [ 'es', 'fr' ]);
+  assert.equal(reviewFor('de', merged.languages), true);
+  assert.equal(reviewFor('fr', merged.languages), false);
+  assert.equal(reviewFor('it', merged.languages), true);
+  assert.equal(reviewFor('nl', merged.languages), false);
+  assert.equal(reviewFor('xx', merged.languages), false);
+  assert.equal(targetCode('it', merged.languages), 'it-IT');
 });
 
 test('validateLanguages: only the site\'s locales and Supertext\'s target codes', () => {
@@ -115,10 +138,15 @@ test('validateLanguages: only the site\'s locales and Supertext\'s target codes'
     gsw: { code: '' }
   }, locales), {
     // English has no formal/informal address: stored as default.
-    en: { code: 'en-GB', politeness: 'default' },
-    de: { code: 'de-CH', politeness: 'more' }
+    en: { code: 'en-GB', politeness: 'default', review: false },
+    de: { code: 'de-CH', politeness: 'more', review: false }
   });
-  for (const bad of [ { de: { code: 'de' } }, { xx: { code: 'de-CH' } }, { de: { code: 'de-CH', politeness: 'very' } } ]) {
+  // Translation review is kept, also without a chosen code.
+  assert.deepEqual(validateLanguages({ de: { code: 'de-CH', review: true }, gsw: { code: '', review: true }, en: { code: '', review: false } }, locales), {
+    de: { code: 'de-CH', politeness: 'default', review: true },
+    gsw: { code: '', politeness: 'default', review: true }
+  });
+  for (const bad of [ { de: { code: 'de' } }, { xx: { code: 'de-CH' } }, { de: { code: 'de-CH', politeness: 'very' } }, { de: { code: 'de-CH', review: 'yes' } } ]) {
     assert.throws(() => validateLanguages(bad, locales), (e) => Array.isArray(e.invalid) && e.invalid.length === 1);
   }
   assert.throws(() => validateLanguages([], locales));
@@ -143,8 +171,9 @@ test('languageStatus for the status screen', () => {
   const languages = { de: { code: 'de-CH', politeness: 'more' }, en: { code: 'en-GB', politeness: 'more' }, ko: { code: 'ko-KR' } };
   assert.deepEqual(languageStatus('de', languages), {
     locale: 'de', code: 'de-CH', mapped: true, supported: true, known: true, defaulted: false,
-    suggestion: 'de-DE', source: 'de', politeness: 'more', politenessAvailable: true, politenessIgnored: false
+    suggestion: 'de-DE', source: 'de', politeness: 'more', politenessAvailable: true, politenessIgnored: false, review: false
   });
+  assert.equal(languageStatus('de', { de: { code: 'de-CH', review: true } }).review, true);
   const en = languageStatus('en', languages);
   assert.equal(en.politeness, 'default');
   assert.equal(en.politenessIgnored, true);

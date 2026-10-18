@@ -11,10 +11,10 @@
  * lib/files.js) in the document menu, and the tasks `check` and `translate`.
  */
 
-const { Languages, SupertextClient, SupertextError, SDK_VERSION, baseUrlFor, normalizeKey } = require('./lib/sdk');
+const { Languages, REVIEW_URL, SupertextError, SDK_VERSION, baseUrlFor, createClient, normalizeKey, reviewUrlFor } = require('./lib/sdk');
 const { collectUnits } = require('./lib/collect');
-const { languageStatus, mergeLanguages, translateUnits, validateLanguages } = require('./lib/translate');
-const { Reporting, siteUrl, versionReportsEnabled } = require('./lib/reporting');
+const { languageStatus, mergeLanguages, reviewFor, translateUnits, validateLanguages } = require('./lib/translate');
+const { PLUGIN_NAME, Reporting, siteUrl, versionReportsEnabled } = require('./lib/reporting');
 const { FilesError, MAX_UPLOAD_BYTES, TranslationFileError, applyTranslations, buildExport, importFile } = require('./lib/files');
 const { version } = require('./package.json');
 
@@ -24,6 +24,8 @@ const RELEASES_URL = 'https://github.com/Supertext/Apostrophe-Supertext-Translat
 const KEY_HELP = `No Supertext account yet? Create one at ${SIGNUP_URL}. ` +
   `Generate your API key at supertext.com → Integrations → API (requires the Admin role): ${API_KEY_URL}`;
 const PROVIDER = 'supertext';
+// Requests to Supertext (and the review service) name the plugin and its version.
+const USER_AGENT = `${PLUGIN_NAME}/${version}`;
 // Where the Commando Center reporter keeps its state: Apostrophe's cache collection
 // (`aposCache`), stored without expiry.
 const STATE_NAMESPACE = 'supertext-apostrophe-translation';
@@ -95,13 +97,16 @@ module.exports = {
     environment: 'live',
     // Custom API address; the SUPERTEXT_API_URL environment variable wins.
     apiUrl: '',
+    // Review service for locales with "Translation review" on (default: Supertext's review
+    // service); '' turns review off for every locale. SUPERTEXT_REVIEW_URL wins when set.
+    reviewUrl: REVIEW_URL,
     // Seconds to wait for one translation.
     timeout: 180,
     // Seconds between status checks.
     pollInterval: 2,
-    // Per locale: { code: 'de-CH', politeness: 'more' | 'less' }. Overrides, for automated
-    // setups, the Supertext language chosen on the Supertext screen (one mapping for both
-    // directions). Locales in neither use an exact match of their name, else the SDK's default
+    // Per locale: { code: 'de-CH', politeness: 'more' | 'less', review: true }. Overrides, for
+    // automated setups, the Supertext language chosen on the Supertext screen (one mapping for
+    // both directions); `review` (true/false) overrides its "Translation review". Locales in neither use an exact match of their name, else the SDK's default
     // (de -> de-DE, en -> en-US, ...), else they are unsupported.
     languages: {},
     // "Send version information to Supertext" (Commando Center); SUPERTEXT_VERSION_REPORTS=0 wins.
@@ -166,12 +171,23 @@ module.exports = {
         return baseUrlFor(self.options.environment, process.env.SUPERTEXT_API_URL || self.options.apiUrl);
       },
 
-      client() {
-        return new SupertextClient(self.apiKey(), {
+      // The review service's address ('' = review off for every locale).
+      reviewUrl() {
+        return reviewUrlFor(self.options.reviewUrl, process.env.SUPERTEXT_REVIEW_URL);
+      },
+
+      // The SDK client: directly to Supertext, or with `review` (a target locale with
+      // *Translation review* on) through the review service, with the same key and settings.
+      // One client does the whole round trip (upload, status, download, delete).
+      client({ review = false } = {}) {
+        return createClient({
+          apiKey: self.apiKey(),
           baseUrl: self.baseUrl(),
+          reviewUrl: self.reviewUrl(),
+          review,
           timeoutMs: Number(self.options.timeout || 180) * 1000,
           pollIntervalMs: Number(self.options.pollInterval ?? 2) * 1000,
-          userAgent: `supertext-apostrophe-translation/${self.version}`
+          userAgent: USER_AGENT
         });
       },
 
@@ -191,7 +207,7 @@ module.exports = {
             pluginVersion: () => self.version,
             systemVersion: () => self.apostropheVersion(),
             actionPath: () => self.action,
-            userAgent: `supertext-apostrophe-translation/${self.version}`,
+            userAgent: USER_AGENT,
             logger: { debug: (message) => (self.apos.util.debug ? self.apos.util.debug(message) : null) }
           });
         }
@@ -214,20 +230,43 @@ module.exports = {
       },
 
       // Saves the screen's choices for the site's locales (validated against Supertext's
-      // target codes). Locales set by the `languages` option keep their stored value.
+      // target codes). What the `languages` option sets keeps its stored value: the code and
+      // form of address of its locales, *Translation review* where it sets `review`.
       async saveLanguages(input) {
         const locales = Object.keys(self.apos.i18n.locales);
-        const { overridden } = mergeLanguages({}, self.options.languages);
-        const editable = Object.fromEntries(Object.entries(input || {}).filter(([ locale ]) => !overridden.includes(locale)));
+        const { overridden, reviewOverridden } = mergeLanguages({}, self.options.languages);
+        const editable = {};
+        for (const [ locale, settings ] of Object.entries(input || {})) {
+          const value = typeof settings === 'string' ? { code: settings } : settings;
+          const review = value && typeof value === 'object' ? value.review : undefined;
+          editable[locale] = overridden.includes(locale) ? { code: '', review } : value;
+          if (reviewOverridden.includes(locale) && editable[locale] && typeof editable[locale] === 'object') {
+            editable[locale] = { ...editable[locale], review: false };
+          }
+        }
         const valid = validateLanguages(editable, locales);
         const stored = await self.storedLanguages();
         const next = {};
-        for (const locale of overridden) {
-          if (stored[locale]) {
-            next[locale] = stored[locale];
+        for (const locale of locales) {
+          const before = stored[locale] && typeof stored[locale] === 'object' ? stored[locale] : null;
+          const entry = overridden.includes(locale)
+            ? {
+              code: (before && before.code) || '',
+              politeness: (before && before.politeness) || 'default',
+              review: Boolean(valid[locale] && valid[locale].review)
+            }
+            : (valid[locale] ? { ...valid[locale] } : null);
+          if (entry && reviewOverridden.includes(locale)) {
+            entry.review = Boolean(before && before.review === true);
+          }
+          if (!entry && reviewOverridden.includes(locale) && before && before.review === true) {
+            next[locale] = { code: '', politeness: 'default', review: true };
+            continue;
+          }
+          if (entry && (entry.code || entry.review)) {
+            next[locale] = entry;
           }
         }
-        Object.assign(next, valid);
         await self.apos.cache.set(STATE_NAMESPACE, LANGUAGES_KEY, next);
         return next;
       },
@@ -339,7 +378,8 @@ module.exports = {
         let missing;
         try {
           const { languages } = await self.languages();
-          missing = await translateUnits(self.client(), units, source, target, languages);
+          // Locales with *Translation review* on go through the review service.
+          missing = await translateUnits(self.client({ review: reviewFor(target, languages) }), units, source, target, languages);
         } catch (e) {
           const auth = e instanceof SupertextError && e.code === 'authentication_failure';
           if (auth) {
@@ -428,13 +468,15 @@ module.exports = {
         const url = self.siteUrl(req);
         const check = await reporting.lastCheck();
         const stored = await self.storedLanguages();
-        const { languages, overridden } = await self.languages();
+        const { languages, overridden, reviewOverridden } = await self.languages();
         return {
           version: self.version,
           releaseUrl: self.releaseUrl(),
           configured: Boolean(self.apiKey()),
           apiKeySource: self.apiKeySource(),
           apiUrl: self.baseUrl(),
+          // Shown next to "Translation review"; '' = review off for every locale.
+          reviewUrl: self.reviewUrl(),
           providerActive: self.apos.translation.providers.some((p) => p.name === PROVIDER),
           signupUrl: SIGNUP_URL,
           apiKeyUrl: API_KEY_URL,
@@ -461,7 +503,8 @@ module.exports = {
               selected: isOverridden ? status.code : ((saved && saved.code) || status.suggestion || ''),
               selectedPoliteness: isOverridden
                 ? status.politeness
-                : (saved && [ 'more', 'less' ].includes(saved.politeness) ? saved.politeness : 'default')
+                : (saved && [ 'more', 'less' ].includes(saved.politeness) ? saved.politeness : 'default'),
+              reviewOverridden: reviewOverridden.includes(locale)
             };
           }),
           targetOptions: Languages.targetOptions().map(({ code, name, politeness }) => ({
@@ -765,13 +808,14 @@ module.exports = {
           const release = self.releaseUrl();
           console.log(`Supertext Translation for Apostrophe ${self.version}${release ? ` (${release})` : ''}`);
           console.log(`API address: ${self.baseUrl()}`);
+          console.log(`Review service (Translation review): ${self.reviewUrl() || 'off (reviewUrl: \'\')'}`);
           console.log(`Supertext SDK: ${SDK_VERSION}`);
           const { languages, overridden } = await self.languages();
           for (const [ locale ] of Object.entries(self.apos.i18n.locales)) {
             const language = languageStatus(locale, languages);
             const origin = overridden.includes(locale) ? ' (module option languages)' : (language.defaulted ? ' (default)' : '');
             console.log(`Locale ${locale}: ${language.code
-              ? `${language.code}${origin}${language.politeness !== 'default' ? ` (politeness ${language.politeness})` : ''}${language.known ? '' : ' (not in Supertext\'s list)'}`
+              ? `${language.code}${origin}${language.politeness !== 'default' ? ` (politeness ${language.politeness})` : ''}${language.known ? '' : ' (not in Supertext\'s list)'}${language.review && self.reviewUrl() ? ' (Translation review)' : ''}`
               : language.source
                 ? `source only (${language.source}); to translate into it, choose its Supertext language on the Supertext screen (admin bar)`
                 : 'no Supertext language: choose one on the Supertext screen (admin bar)'}`);

@@ -136,6 +136,7 @@
                     <th>{{ $t('supertext:locale') }}</th>
                     <th>{{ $t('supertext:supertextLanguage') }}</th>
                     <th>{{ $t('supertext:formOfAddress') }}</th>
+                    <th>{{ $t('supertext:review') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -185,9 +186,33 @@
                         class="supertext-status__muted"
                       >{{ $t('supertext:defaultAddress') }}</span>
                     </td>
+                    <td class="supertext-language-review">
+                      <AposCheckbox
+                        :id="`supertext-review-${language.locale}`"
+                        v-model="form[language.locale].review"
+                        :field="{
+                          name: `supertextReview-${language.locale}`,
+                          label: 'supertext:review',
+                          hideLabel: true,
+                          readOnly: language.reviewOverridden || saving || !status.reviewUrl
+                        }"
+                        :choice="{
+                          value: true,
+                          label: 'supertext:review'
+                        }"
+                      />
+                      <span
+                        v-if="language.reviewOverridden"
+                        class="supertext-status__muted supertext-status__block"
+                      >{{ $t('supertext:overridden') }}</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>
+              <p class="supertext-status__muted supertext-status__help supertext-review-help">
+                <strong>{{ $t('supertext:review') }}:</strong>
+                {{ $t(status.reviewUrl ? 'supertext:reviewHelp' : 'supertext:reviewOff') }}
+              </p>
               <div class="supertext-status__test">
                 <AposButton
                   type="primary"
@@ -324,7 +349,8 @@ export default {
       this.status = status;
       this.form = Object.fromEntries(status.languages.map((language) => [ language.locale, {
         code: language.selected || '',
-        politeness: language.selectedPoliteness || 'default'
+        politeness: language.selectedPoliteness || 'default',
+        review: Boolean(language.review)
       } ]));
     },
     offersPoliteness(code) {
@@ -341,9 +367,10 @@ export default {
       this.saveResult = null;
       const languages = {};
       for (const language of this.status.languages) {
-        if (!language.overridden) {
-          languages[language.locale] = { ...this.form[language.locale] };
-        }
+        // Locales whose code the module option sets: only *Translation review* is saved.
+        languages[language.locale] = language.overridden
+          ? { review: Boolean(this.form[language.locale].review) }
+          : { ...this.form[language.locale] };
       }
       try {
         const keyCheck = this.keyCheck;

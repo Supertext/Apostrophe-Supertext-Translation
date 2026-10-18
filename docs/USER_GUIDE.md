@@ -95,6 +95,8 @@ Localizing into a locale where the document already exists **replaces that draft
 
 Unpublished changes you made in the translated draft are lost; the published version stays as it is until you publish again. The URL of an existing localization is kept.
 
+**Translation review:** if your administrator turned on *Translation review* for a locale, reviewers (your colleagues or Supertext linguists) check and correct the translations on the website. Their corrections come into Apostrophe the next time you localize the page or piece into that locale with *Translate text content*: after a review, translate it again. Texts reviewed once keep their corrected wording in later translations.
+
 ## What is translated
 
 - The **title** and other text fields (including multi-line text fields such as summaries).

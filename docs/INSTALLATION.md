@@ -14,7 +14,7 @@ The module registers Supertext as a **translation provider** for Apostrophe's ow
 - A Supertext account and an API key for the AI translation API:
   - No Supertext account yet? Create one at supertext.com: <https://www.supertext.com/person/en/account/signin>
   - Generate your API key at supertext.com → Integrations → API (requires the **Admin** role): <https://www.supertext.com/en/integrations/api>
-- The server must reach `https://api.supertext.com` over HTTPS.
+- The server must reach `https://api.supertext.com` over HTTPS (and, for [Translation review](#translation-review), Supertext's review service `https://localizationreview-production.up.railway.app`).
 
 ## Install
 
@@ -98,9 +98,9 @@ export default {
 };
 ```
 
-Every locale needs a **Supertext language**. Administrators choose it in the admin bar under **Supertext → Languages**: one combo box per locale (all of the site's locales, the default locale included, because the same code is used when the locale is the source; as source, only its language is sent: `de-CH` → `de`). The combo box lists Supertext's target languages as *Name (code)*, the names in your interface language. Where Supertext offers formal and informal address for the chosen language (e.g. German, French, Italian, Spanish, Dutch, not English), a second combo box sets the **form of address**: *Default*, *Formal* or *Informal*. Click **Save languages**; the choice is stored in the database (Apostrophe's cache collection, without expiry) and applies at once, without a restart.
+Every locale needs a **Supertext language**. Administrators choose it in the admin bar under **Supertext → Languages**: one combo box per locale (all of the site's locales, the default locale included, because the same code is used when the locale is the source; as source, only its language is sent: `de-CH` → `de`). The combo box lists Supertext's target languages as *Name (code)*, the names in your interface language. Where Supertext offers formal and informal address for the chosen language (e.g. German, French, Italian, Spanish, Dutch, not English), a second combo box sets the **form of address**: *Default*, *Formal* or *Informal*. The checkbox **Translation review** sends translations into that locale through Supertext's review service (off by default; see [Translation review](#translation-review)). Click **Save languages**; the choice is stored in the database (Apostrophe's cache collection, without expiry) and applies at once, without a restart.
 
-![The language section of the Supertext screen: English mapped to British English (en-GB) with the default form of address, Deutsch to Swiss High German (de-CH), Français to Swiss French (fr-CH) and Italiano to Italian (Switzerland) (it-CH), the last three formal, and the Save languages button with "Languages saved."](images/status-languages.png)
+![The language section of the Supertext screen: English mapped to British English (en-GB) with the default form of address, Deutsch to Swiss High German (de-CH), Français to Swiss French (fr-CH) and Italiano to Italian (Switzerland) (it-CH), the last three formal, a Translation review checkbox per locale (not ticked) with its explanation below, and the Save languages button with "Languages saved."](images/status-languages.png)
 
 The code used for a locale:
 
@@ -129,13 +129,14 @@ Supertext's codes: target languages are regional only for German, English, Frenc
   options: {
     languages: {
       de: { code: 'de-CH', politeness: 'more' },   // Swiss German, formal (Sie)
-      it: 'it-CH'                                  // short form: just the code
+      it: 'it-CH',                                 // short form: just the code
+      fr: { review: true }                         // only Translation review, the code from the screen
     }
   }
 }
 ```
 
-`politeness` is `more` (formal), `less` (informal) or left out (Supertext's default). It is only sent for languages where Supertext offers formal and informal address; for others it is ignored, and the status screen says so.
+`politeness` is `more` (formal), `less` (informal) or left out (Supertext's default). It is only sent for languages where Supertext offers formal and informal address; for others it is ignored, and the status screen says so. `review` (`true` or `false`) sets *Translation review* for the locale and makes its checkbox read-only; without it, the screen's checkbox applies.
 
 **Upgrading from 0.1.0:** a mapping you set with the `languages` option keeps working unchanged (it is the override now). To manage those locales on the screen instead, remove them from the option and restart; the screen then preselects the default until you save.
 
@@ -151,13 +152,24 @@ All settings are options of the `supertext-apostrophe-translation` module in `ap
 | --- | --- | --- |
 | `apiKey` | `''` | Supertext API key. The environment variable `SUPERTEXT_API_KEY` takes precedence. |
 | `environment` | `'live'` | Supertext API environment: `live` (`https://api.supertext.com/v1/`), `staging` or `testing`. |
-| `apiUrl` | `''` | Custom API address (overrides `environment`). The environment variable `SUPERTEXT_API_URL` takes precedence. Only for tests against a stand-in. |
-| `languages` | `{}` | Optional override of the mapping chosen on the Supertext screen (for automated setups), per locale: `{ code, politeness }` or just the code (`'de-CH'`). A locale listed here wins over the screen (see [Languages](#languages)). `code` is the Supertext language (used as target and, without region, as source); `politeness` is `more` (formal), `less` (informal) or left out (Supertext's default); only sent where Supertext offers it. |
+| `apiUrl` | `''` | Custom API address (overrides `environment`). The environment variable `SUPERTEXT_API_URL` takes precedence. Only for tests against a stand-in; for [Translation review](#translation-review) tick the locales' checkbox instead. |
+| `reviewUrl` | Supertext's review service | Address of the review service for locales with *Translation review* on (`https://localizationreview-production.up.railway.app/v1/`). `''` turns review off for every locale. The environment variable `SUPERTEXT_REVIEW_URL` takes precedence when it is set and not empty. Only change it when Supertext gives you another address. |
+| `languages` | `{}` | Optional override of the mapping chosen on the Supertext screen (for automated setups), per locale: `{ code, politeness, review }` or just the code (`'de-CH'`). A locale listed here wins over the screen (see [Languages](#languages)). `code` is the Supertext language (used as target and, without region, as source); `politeness` is `more` (formal), `less` (informal) or left out (Supertext's default); only sent where Supertext offers it; `review` (`true`/`false`) overrides the locale's *Translation review*. |
 | `versionReports` | `true` | *Send version information to Supertext* (see [Version reports](#version-reports-commando-center)). The environment variable `SUPERTEXT_VERSION_REPORTS=0` turns it off (and `=1` on), whatever the option says. |
 | `translateSlugs` | `true` | New localizations get a slug made from the translated title (`/swiss-chocolate` → `/de/schweizer-schokolade…`). Re-translating keeps the slug the localized document already has. Set to `false` to keep Apostrophe's default (the source slug). |
 | `skipWidgets` | `['@apostrophecms/html']` | Widget types that are never translated. |
 | `timeout` | `180` | Seconds to wait for one translation before giving up. |
 | `pollInterval` | `2` | Seconds between status checks while Supertext translates. |
+
+On the Supertext screen (**Supertext → Languages**), per locale:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| *Supertext language* | preselected (see [Languages](#languages)) | Supertext code for the locale, both directions. |
+| *Form of address* | *Default* | Only shown where the Supertext language offers it. |
+| *Translation review* | off | Translations into this locale go through Supertext's review service (see [Translation review](#translation-review)). |
+
+The screen's choices are stored in Apostrophe's cache collection (`aposCache`, namespace `supertext-apostrophe-translation`, key `languages`, without expiry).
 
 To keep a field of your own schema out of translation, add `translate: false` to the field (see [what is translated](USER_GUIDE.md#what-is-translated)).
 
@@ -165,7 +177,21 @@ To keep a field of your own schema out of translation, add `translate: false` to
 
 Administrators (users who may edit users, i.e. the *admin* role) see **Supertext** in the admin bar. It shows the module version (linked to its release notes), where the API key comes from, the API address, whether automatic translation is active in *Localize…*, the result of the last **API key check** with its time, whether version information is sent to Supertext, the ping address, the account and API key links, a **Test connection** button and the **Languages** section (a combo box with the Supertext language and, where offered, the form of address per locale, and **Save languages**; see [Languages](#languages)):
 
-![The Supertext status screen: version 0.1.0, API key set from the environment variable, API address https://api.supertext.com/v1/, automatic translation on, API key check "the connection to Supertext works" with its time, version information on with its explanation, the ping address, a successful connection test and the start of the Languages section with combo boxes for English (en-GB) and Deutsch (de-CH, formal)](images/status.png)
+![The Supertext status screen: version 0.1.0, API key set from the environment variable, API address https://api.supertext.com/v1/, automatic translation on, API key check "the connection to Supertext works" with its time, version information on with its explanation, the ping address, a successful connection test and the start of the Languages section with combo boxes for English (en-GB) and Deutsch (de-CH, formal) and a Translation review checkbox per locale](images/status.png)
+
+### Translation review
+
+With **Translation review**, people check the translations on the website itself and correct them there: customers or Supertext linguists open the original and the translated page side by side in Chrome with the *Supertext Localization Review* extension and fix texts in a side panel. Their corrections come back into Apostrophe.
+
+Turn it on per locale that is translated **into**: admin bar → **Supertext** → *Languages* → tick **Translation review** in that locale's row (e.g. *Deutsch*) → **Save languages**. Untick it and save to turn it off again; nothing else changes.
+
+- Translations into that locale then go through Supertext's review service instead of directly to Supertext. It answers exactly like Supertext and passes everything on with your API key, so billing, languages, form of address and error messages stay the same. Other locales keep going directly to Supertext.
+- The review service keeps every translation of your account. A text it has translated before gets the same translation again (without a new Supertext call), and once a reviewer has corrected it, the corrected text.
+- **Corrections arrive with the next translation:** after a review, localize the pages or pieces into that locale again (*Localize…* with *Translate text content*, which replaces the existing draft, or the `translate` task with `--overwrite`) to write the corrections into Apostrophe. As always, translating again overwrites manual changes in the translated texts.
+- Reviewers get a review link for your site from Supertext; nothing to set up in Apostrophe.
+- The review service works with keys of the **live** Supertext API. With `environment: 'staging'` or `'testing'` (or `apiUrl`), leave review off.
+- *Export for translation* and *Import translation* don't use the review service. The automatic API key check, **Test connection**, the `check` task and the version reports still go directly to Supertext.
+- `reviewUrl: ''` turns review off for every locale (the checkboxes are then read-only).
 
 ### API key check
 
@@ -238,6 +264,8 @@ node app supertext-apostrophe-translation:translate --slug=handmade-in-bern --ty
 | Status screen: *… because Supertext can't be reached* (key check *unreachable*) | The server can't reach `api.supertext.com`; translations will fail too. Check firewall, proxy and DNS, then **Test connection**. |
 | Status screen: *Supertext answered with an error (HTTP …)* | Supertext had a problem; try **Test connection** later. Contact support@supertext.com if it persists. |
 | Supertext support can't see your installation | Version reports are off, `APOS_BASE_URL` is a local address, or the server can't reach `commandocenter-production.up.railway.app`. Reports are retried after an hour. |
+| *Supertext rejected the API key* only for locales with *Translation review* | The review service only works with keys of the live Supertext API: with `environment: 'staging'`/`'testing'` (or `apiUrl`) leave review off. |
+| Reviewers' corrections don't show up in Apostrophe | They arrive with the next translation: localize the documents into that locale again (this replaces the existing draft). Check that the locale's *Translation review* is ticked and saved, and that `reviewUrl` isn't `''`. |
 | *Too many requests* | Supertext limits requests per second. The module retries automatically up to four times; if it still fails, localize into fewer locales at once. |
 | *The translation took too long.* | Very long documents. Raise `timeout`. |
 | *Your Supertext translation quota is used up.* | The account's quota is used up: upgrade the subscription at supertext.com. |
