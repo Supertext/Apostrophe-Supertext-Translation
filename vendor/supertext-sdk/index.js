@@ -8,3 +8,5 @@
  */
 export * as v1 from './v1/index.js';
 export { SDK_VERSION } from './version.js';
+// Translation files (XLIFF 1.2 and HTML export/import) don't talk to the API, so they aren't versioned.
+export { TranslationFiles, TranslationFileError, MAX_FILE_CHARACTERS } from './translation-file.js';

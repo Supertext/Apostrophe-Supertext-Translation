@@ -11,7 +11,7 @@ modules: {
 }
 ```
 
-Translates titles and text fields, rich text (a paragraph at a time, with formatting and links kept), the text of other widgets, arrays and objects, and gives new localizations a translated URL. Works for pages and pieces, one at a time or in batches, and includes a status screen for administrators (with the automatic API key check and a combo box per locale for its Supertext language) and the tasks `check` and `translate`. It sends version information to Supertext (no content, no key; [can be turned off](docs/INSTALLATION.md#version-reports-commando-center)).
+Translates titles and text fields, rich text (a paragraph at a time, with formatting and links kept), the text of other widgets, arrays and objects, and gives new localizations a translated URL. Works for pages and pieces, one at a time or in batches, offers *Export for translation* / *Import translation* (XLIFF 1.2 or HTML files for translation tools, translators or Supertext's web app), and includes a status screen for administrators (with the automatic API key check and a combo box per locale for its Supertext language) and the tasks `check` and `translate`. It sends version information to Supertext (no content, no key; [can be turned off](docs/INSTALLATION.md#version-reports-commando-center)).
 
 ![Apostrophe's Localize Content wizard with "Translate text content" ticked and the note "Translated by Supertext AI"](docs/images/localize-translate.png)
 
@@ -22,7 +22,7 @@ Translates titles and text fields, rich text (a paragraph at a time, with format
 ## Guides
 
 - [Installation guide](docs/INSTALLATION.md): requirements, install, API key, languages, all settings, troubleshooting
-- [User guide](docs/USER_GUIDE.md): translating and reviewing with *Localize…*
+- [User guide](docs/USER_GUIDE.md): translating and reviewing with *Localize…*, exporting and importing translation files
 - [Developer guide](docs/DEVELOPER.md): architecture, Supertext API protocol, tests, demo, releasing, roadmap
 
 [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · MIT licensed

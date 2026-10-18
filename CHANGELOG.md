@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Added
 
+- Export for translation (XLIFF 1.2 or HTML) and import of translated files; Supertext SDK 0.5.0. *Export for translation* and *Import translation* in the More Options menu of pages and pieces: download a document's texts for one or more locales, have them translated in a translation tool, by a translator or in Supertext's web app, and import the file again as drafts (with a summary: imported, skipped because the source changed, untranslated, formatting changed, not in the file).
+
 - Supertext as a translation provider for Apostrophe's own *Localize…* step: with *Translate text content* ticked, pages and pieces (single or batch, and their related documents) are translated by Supertext AI before Apostrophe saves them as drafts.
 - An unknown language (e.g. `xx-YY`) is now reported as an unsupported language pair too, not as "resource not found" (Supertext answers it with HTTP 404).
 - Translates string fields, rich text (one paragraph, heading, list item or table cell at a time, formatting and links kept), the fields of other widgets, arrays and objects at any depth. `translate: false` fields and HTML widgets are skipped.

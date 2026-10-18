@@ -2,14 +2,14 @@
 
 For editors: how to translate pages and pieces with Supertext in ApostropheCMS, how to review the result, and what the messages mean. Administrators: see the [installation guide](INSTALLATION.md).
 
-Supertext works inside Apostrophe's own **Localize…** step. There is no separate button: when the module is set up, the *Localize…* wizard has a **Translate text content** option, and the copies it creates in other languages are translated by Supertext AI.
+Supertext works inside Apostrophe's own **Localize…** step: when the module is set up, the *Localize…* wizard has a **Translate text content** option, and the copies it creates in other languages are translated by Supertext AI. To have a document translated outside Apostrophe instead (a translation tool, a translator, Supertext's web app), use **Export for translation** and **Import translation** in the same menu (see [Translate with a file](#translate-with-a-file-xliff-or-html)).
 
 ## Translate a page or piece
 
 1. Open the page (or the piece, e.g. an article) in the language you wrote it in, usually English. Save your changes first: Supertext translates the saved draft.
 2. Open the **More Options** menu (⋮) in the admin bar (on a piece: in the editor's menu, or in the list) and choose **Localize…**.
 
-   ![The More Options menu of a page in edit mode, with Edit, Duplicate, Localize, Share Draft, Document Versions, Archive and Unpublish](images/localize-menu.png)
+   ![The More Options menu of a page in edit mode, with Edit, Duplicate, Localize, Share Draft, Export for translation, Import translation and Document Versions](images/localize-menu.png)
 
 3. Select the locales to translate into, or **Select All**. A filled dot next to a locale means the document already exists there.
 
@@ -26,6 +26,58 @@ Supertext works inside Apostrophe's own **Localize…** step. There is no separa
    ![Notification: 3 documents successfully localized, with a Manage documents link](images/localize-done.png)
 
 You can also translate several pieces at once: select them in the list, choose **Localize** from the batch actions, and tick *Translate text content* in the same way.
+
+## Translate with a file (XLIFF or HTML)
+
+Instead of translating with *Localize…*, you can download a document's texts as a file, have them translated anywhere, and import the translated file again. The file contains exactly the texts *Translate text content* would send (see [What is translated](#what-is-translated)).
+
+### Export for translation
+
+1. Open the page or piece in its source language, save your changes, and choose **Export for translation** in the **More Options** menu (⋮), next to *Localize…*.
+2. Choose the **File format**:
+   - **XLIFF 1.2 (for translation tools)**: the standard format of translation tools such as Trados, memoQ or Phrase, and the better choice for them. Formatting (bold, links …) appears as protected tags. One file can hold several target languages.
+   - **HTML (one language per file)**: for Supertext's web app or anyone who translates HTML. Choose exactly one target language.
+3. Tick the **Target languages** and click **Download file**. The file is called `apostrophe-<document id>-<locale>.xlf` (or `.html`; `apostrophe-<document id>.xlf` for several languages).
+
+![The Export for translation dialog for the page "Swiss chocolate, shipped worldwide" (English): file format XLIFF 1.2 (for translation tools) selected, HTML (one language per file) as the alternative, target languages Deutsch and Français ticked, Italiano not, and the button Download file](images/export-dialog.png)
+
+If the document has no text to translate, the dialog says *Nothing to translate.* and no file is downloaded.
+
+Send the file to your translator, open it in your translation tool, or upload it to Supertext's web app. Whoever translates an **HTML** file must leave its head (the `supertext:` lines) and the `data-st-id` attributes alone, and only translate the text. An HTML file has no way to mark a text as untranslated: imported unchanged, it writes the source text into the target language.
+
+### Import translation
+
+1. Choose **Import translation** in the **More Options** menu of any page or piece (the file itself says which document and language it belongs to).
+2. Choose the **Translated file (XLIFF or HTML)** (at most 10 MB).
+3. Optionally tick:
+   - **Also import texts whose source changed since the export**: texts edited in the source after the export are skipped by default, because their translation may no longer fit.
+   - **Replace the draft where the document already exists in the target locale**: without it, a document that already exists in the target locale is left alone (like the `translate` task without `--overwrite`).
+4. Click **Import translation**.
+
+![The Import translation dialog with the file apostrophe-swiss-chocolate-fr.xlf chosen, "Replace the draft where the document already exists in the target locale" ticked, and the summary: Swiss chocolate, shipped worldwide → Français (fr), Imported: 4, Not translated in the file: 1, Saved as a draft in Français](images/import-summary.png)
+
+The translations are saved exactly like a translation from *Localize…*: as a **draft** in the target locale (a new localization gets a translated URL), structure and formatting from the current source. Review and publish them as described [below](#review-and-publish). Texts that aren't imported keep the source text in the new draft.
+
+The summary lists each document and language in the file:
+
+| Line | Meaning |
+| --- | --- |
+| *Imported: n* | Texts written into the draft. |
+| *Skipped, source changed since the export: n* | The source text was edited after the export. Tick *Also import texts whose source changed since the export* to import them anyway, or export again. |
+| *Not translated in the file: n* | The file has no translation for these texts (XLIFF only). |
+| *Formatting changed, not imported: n* | The translation broke, removed or added formatting (tags) the source doesn't have. Fix it in the translation tool and import again. |
+| *Not in the file: n* | Texts added to the document after the export. Export again to translate them. |
+
+| Message | Meaning |
+| --- | --- |
+| *This file isn't a valid XLIFF or HTML translation file.* | The file is damaged, not XLIFF or HTML, or not well-formed. |
+| *This file wasn't exported by the Supertext plugin, or its header was removed.* | Use a file from *Export for translation*; for HTML, keep its head. |
+| *The file is too large (at most 10 MB).* | Split the work into several exports. |
+| *This file belongs to another system (…).* | The file was exported by another Supertext plugin (e.g. from another CMS). |
+| *The document this file was exported from no longer exists.* | It was deleted (or you may not see it). |
+| *The site has no language ….* | The file's source or target locale isn't one of this site's locales (any more). |
+| *Not imported: the document already exists in ….* | Tick *Replace the draft where the document already exists in the target locale*. |
+| *You may not change this document in ….* | You need permission to edit the document (Apostrophe's own permissions). |
 
 ## Review and publish
 

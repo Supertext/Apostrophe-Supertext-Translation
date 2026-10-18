@@ -8,3 +8,5 @@
  */
 export * as v1 from './v1/index.js';
 export { SDK_VERSION } from './version.js';
+export { TranslationFiles, TranslationFileError, MAX_FILE_CHARACTERS } from './translation-file.js';
+export type { FileFormat, FileJob, FileSegment, FileUnit, ImportStatus, ImportedSegment, TranslationFile, TranslationFileErrorCode } from './translation-file.js';

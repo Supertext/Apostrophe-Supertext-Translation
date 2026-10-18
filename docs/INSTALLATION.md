@@ -201,7 +201,11 @@ Reports go from the server only, on back-end requests (status screen, translatio
 
 ### Permissions
 
-Translation follows Apostrophe's own permissions: whoever may localize a document (by default editors and administrators) gets the Supertext option in *Localize…*. Translated copies are always saved as drafts. The status screen and its API routes are for administrators only.
+Translation follows Apostrophe's own permissions: whoever may localize a document (by default editors and administrators) gets the Supertext option in *Localize…* and the entries **Export for translation** and **Import translation** in its menu. Exporting needs permission to edit the document; importing needs permission to edit the source document, and Apostrophe's own localize step checks the target locale. Translated and imported copies are always saved as drafts. The status screen and its API routes are for administrators only.
+
+### Translation files (export and import)
+
+*Export for translation* and *Import translation* ([user guide](USER_GUIDE.md#translate-with-a-file-xliff-or-html)) need nothing to configure and work without an API key (no Supertext API call is made). Files use the same language mapping as translations (Supertext → Languages); a locale without a Supertext language is written with its own name (`de_LI` → `de-LI`), so it doesn't block an export. Uploads are limited to **10 MB** and refused before they are read; they are parsed in memory and never stored. If a reverse proxy limits request bodies (e.g. nginx `client_max_body_size`, 1 MB by default), allow 10 MB for `POST /api/v1/supertext-apostrophe-translation/import`.
 
 ## Command-line tasks
 

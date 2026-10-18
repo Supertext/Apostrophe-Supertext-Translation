@@ -12,6 +12,7 @@ lib/sdk.js                   loads the vendored Supertext SDK (its v1 API: clien
 lib/document.js              text units: one per plain-text field, one per rich-text paragraph
 lib/collect.js               field rules: finds the texts of a document by its schema
 lib/translate.js             language codes (saved mapping + languages option), validation, form of address, sends units through the SDK
+lib/files.js                 translation files: export (XLIFF/HTML) and import glue on the SDK's TranslationFiles
 lib/reporting.js             Commando Center glue: version reports, API key check, ping (Plugin Health's InstallationReporter)
 vendor/supertext-sdk/        the Supertext TypeScript SDK (built JavaScript), copied by scripts/vendor-sdk.sh
 vendor/supertext-plugin-health/  Supertext Plugin Health (built JavaScript), copied by scripts/vendor-plugin-health.sh
@@ -20,6 +21,7 @@ scripts/vendor-plugin-health.sh  updates vendor/supertext-plugin-health from the
 i18n/supertext/<lang>.json   UI strings (en, de, fr, it), namespace "supertext"
 i18n/apostrophe/<lang>.json  overrides Apostrophe's automaticTranslationDisclaimer
 ui/apos/components/SupertextStatusModal.vue   admin status screen with the language combo boxes
+ui/apos/components/SupertextFilesModal.vue    "Export for translation" / "Import translation" dialog (document menu)
 test/                        unit tests (node --test), no Apostrophe needed
 tests/docs/                  stand-in API, sample translations, screenshot script
 tests/demo-check.sh          CI check of the demo image
@@ -120,6 +122,20 @@ AI file translation API v1, the same as the WordPress plugin. The SDK does all o
 
 The stand-in (`tests/docs/stand-in.mjs`) rejects bare targets and regional sources like the real API.
 
+## Translation files: export and import (`lib/files.js`)
+
+*Export for translation* and *Import translation* use the SDK's `TranslationFiles` (Supertext SDK 0.5.0, `vendor/supertext-sdk/translation-file.js`, imported from the copy's root `index.js`, not from `v1/`: it doesn't talk to the API). They are an alternative to the API: the file is translated elsewhere and imported again.
+
+- **UI:** two context operations registered with `apos.doc.addContextOperation` (`supertext-export`, `supertext-import`, context `update`, condition `canLocalize`), so they appear in the More Options menu of every localized page and piece next to *Localize…*. Both open `SupertextFilesModal` with `mode` `export` or `import`.
+- **Routes** (`routes` in `index.js`, logged in; Apostrophe checks the CSRF token, or a bearer token for API calls):
+  - `POST /api/v1/supertext-apostrophe-translation/export`, JSON `{ _id, format: 'xliff' | 'html', targets: [locale…] }`: loads the document's draft in its locale (permission *edit*), collects the units with `self.units()` (`lib/collect.js`, the same units and keys as an API translation) and returns the file with `Content-Type` `application/x-xliff+xml` / `text/html; charset=utf-8` and `Content-Disposition: attachment; filename="apostrophe-<aposDocId>-<locale>.xlf"` (`apostrophe-<aposDocId>.xlf` for several targets). XLIFF: one job per target locale in one file; HTML: exactly one target.
+  - `POST /api/v1/supertext-apostrophe-translation/import?includeChanged=1&overwrite=1`, body: the file as text. Refused above 10 MB by `Content-Length` before reading, and while reading (`readBody` in `index.js`); kept in memory only. Returns `{ jobs: [summary…] }` (`counts` per SDK status, `imported`, `skippedChanged`, `saved`, `error`, `message`).
+- **Job metadata:** `plugin` = `Apostrophe-Supertext-Translation`; `reference` = `doc:<aposDocId>:<source locale>:<target locale>` (e.g. `doc:clx3k2…:en:de`; ids and locale names only, `formatReference`/`parseReference`); `sourceLanguage`/`targetLanguage` = `Languages.source`/`Languages.target` with the module's mapping, else the locale name with `_` → `-`. Segment keys are the units' paths (`title`, `main.0.content[1]`).
+- **Import** (`importFile` in `lib/files.js`, Apostrophe parts injected by `importTranslationFile` in `index.js`): `TranslationFiles.read(content)`; per job: `plugin` must be ours (else `other_system`), the reference must parse (else `not_found`), both locales must exist (else `no_language`), the source draft is loaded by `aposDocId` with the editor's permissions (else `not_found`; no *edit* permission: `forbidden`), its units are collected again and `TranslationFiles.importTranslations(file, current)` decides per segment. `ok` results (and `source_changed` with *includeChanged*) are written; `untranslated`, `invalid_markup` and `missing` aren't.
+- **Write-back:** the same path as an API translation: Apostrophe's own `manager.localize(req, sourceDraft, target, { update })`, with the translations on the request (`req.supertextImport`); the module's `@apostrophecms/doc-type:beforeLocalize` handler (`applyImport`) detaches the copy, applies the translations to its units (`applyTranslations`) and applies the slug rules (`translateSlug`/`keepSlug`). So imports land as drafts, keep the source's structure, and Apostrophe checks the target locale's permissions (and that a page's parent exists there). An existing localization is only replaced with *overwrite* (else the job reports `exists`), like the `translate` task's `--overwrite`.
+- **Errors:** `FilesError` (glue: `nothing_to_translate`, `no_targets`, `one_target`, `not_found`, `other_system`, `no_language`, `forbidden`, `exists`, `localize_failed`, `too_large`) and the SDK's `TranslationFileError` (`invalid_file`, `missing_metadata`, `too_large`) are shown with `supertext:files_error_<code>`.
+- **Security:** the import trusts nothing in the file: the SDK refuses DTDs and oversized files and takes markup only from the current source (XLIFF codes replaced by the source's tags; HTML only with the source's tags, attributes and safe links).
+
 ## Commando Center: version reports, key check, ping
 
 Protocol: [Commando-Center-Supertext-Translation](https://github.com/Supertext/Commando-Center-Supertext-Translation) → `docs/DEVELOPER.md` → *Report protocol*. Supertext Plugin Health's `InstallationReporter`, `reportsEnabled()`, `reporterState()` and `pingResponse()` implement it (the key check is the SDK's `checkApiKey()`, passed in as the reporter's key checker with `apiKeyFingerprint`; the SDK client gets the module's API address and User-Agent); `lib/reporting.js` (no Apostrophe imports) loads the state, runs one reporter action and stores the new state, serialized and never throwing; `index.js` (`reporting()`, `siteUrl()`, `reportInBackground()`) gives it what Apostrophe knows.
@@ -165,8 +181,8 @@ The stand-in (`tests/docs/stand-in.mjs`) answers like the Supertext API: texts f
 
 ## Tests
 
-- `npm test`: unit tests for the text units (rich text split into paragraphs, formatting and links kept), the field rules and the translation through a fake client, the vendored SDK (it loads, sends the auth header, the language codes and deletes the file), the vendored Plugin Health copy (it loads, keeps state stored by the old SDK reporter), the language mapping (mapping → exact match → SDK default → `unsupported_language`, which sends nothing; the option overriding the saved mapping; server-side validation of what the screen saves; politeness only where offered), the Commando Center glue with a fake transport and the UI strings (every language has the same keys, placeholders and URLs as English). The SDK's own tests and conformance scenarios run in the SDK repository, Plugin Health's in the Commando Center repository.
-- `tests/demo-check.sh` (CI): builds on the demo image, starts it twice against PostgreSQL and the stand-in, checks the demo accounts (created once, never duplicated, no password in the log), runs `check` (key check and a version report to the stand-in), checks the public ping, the language route (editors get 403, invalid codes or locales 400, the status lists the saved choice and Supertext's codes), translates the sample page and article with the `translate` task into de/fr/it, checks that a second run skips existing locales, and reads the German page and Italian article back through Apostrophe's REST API as the editor.
+- `npm test`: unit tests for the text units (rich text split into paragraphs, formatting and links kept), the field rules and the translation through a fake client, the vendored SDK (it loads, sends the auth header, the language codes and deletes the file), the vendored Plugin Health copy (it loads, keeps state stored by the old SDK reporter), the language mapping (mapping → exact match → SDK default → `unsupported_language`, which sends nothing; the option overriding the saved mapping; server-side validation of what the screen saves; politeness only where offered), the Commando Center glue with a fake transport, the translation files glue (`test/files.test.js`: reference round trip, export with the collector's keys and the mapping, import of `ok` only, `source_changed` only with the option, `untranslated`/`invalid_markup`/`missing` not written, other plugin, unknown reference, missing language, existing localization, too large files) and the UI strings (every language has the same keys, placeholders and URLs as English). The SDK's own tests and conformance scenarios run in the SDK repository, Plugin Health's in the Commando Center repository.
+- `tests/demo-check.sh` (CI): builds on the demo image, starts it twice against PostgreSQL and the stand-in, checks the demo accounts (created once, never duplicated, no password in the log), runs `check` (key check and a version report to the stand-in), checks the public ping, the language route (editors get 403, invalid codes or locales 400, the status lists the saved choice and Supertext's codes), translates the sample page and article with the `translate` task into de/fr/it, checks that a second run skips existing locales, reads the German page and Italian article back through Apostrophe's REST API as the editor, and does one export → import round trip (the article as HTML for French, title edited, imported once without and once with *overwrite*).
 
 ```bash
 docker build -f demo/Dockerfile -t supertext-apostrophe-demo .
@@ -178,7 +194,7 @@ The script drops nothing: run it against a fresh database (it uses `supertext_ap
 
 ## Docs screenshots
 
-`npm run docs:screenshots` (script `tests/docs/screenshots.mjs`, Playwright) logs in to a **fresh** demo (nothing localized yet) whose module talks to the stand-in, localizes the sample page as the editor and captures the wizard, the German result, the status screen and its language section (after **Save languages**) as the administrator. Set `BASE_URL` and the `DEMO_*` accounts; `CHROMIUM_PATH` if Playwright's own browser isn't installed. The status screenshot shows the live API address instead of the stand-in's and `https://www.example.ch` in the ping address. Point the demo's `SUPERTEXT_REPORT_URL` at the stand-in. `RESUME=1` skips the first localization (for a demo that has it already). Regenerate the images whenever the UI they show changes.
+`npm run docs:screenshots` (script `tests/docs/screenshots.mjs`, Playwright) logs in to a **fresh** demo (nothing localized yet) whose module talks to the stand-in, localizes the sample page as the editor and captures the wizard, the German result, the *Export for translation* dialog and an *Import translation* summary (a French XLIFF file filled from `samples.json`), the status screen and its language section (after **Save languages**) as the administrator. Set `BASE_URL` and the `DEMO_*` accounts; `CHROMIUM_PATH` if Playwright's own browser isn't installed. The status screenshot shows the live API address instead of the stand-in's and `https://www.example.ch` in the ping address. Point the demo's `SUPERTEXT_REPORT_URL` at the stand-in. `RESUME=1` skips the first localization (for a demo that has it already). Regenerate the images whenever the UI they show changes.
 
 ## Demo
 
@@ -245,7 +261,8 @@ Publishing to npm (`npm publish`) is a separate, manual step by Supertext.
 ## Known limitations and roadmap
 
 - `@apostrophecms/translation` is marked "may change" by Apostrophe; the module follows its interface as of Apostrophe 4.33.
-- Only the provider API is used: there is no Supertext-specific UI in the editor, and Apostrophe gives no overwrite warning when localizing into a locale that already has the document.
+- Translation goes through the provider API: apart from *Export for translation* / *Import translation*, there is no Supertext-specific UI in the editor, and Apostrophe gives no overwrite warning when localizing into a locale that already has the document.
+- Translation files are exported one document at a time (no batch export from the list yet). An import writes the whole localization again from the current source: texts not imported keep the source text.
 - Rich text is split into block elements; inline-only rich text is sent as one unit. Tables are translated cell by cell.
 - Translations run during the localize request; very long documents can make the wizard wait until `timeout`.
 - Professional (human) translation orders are not supported yet.

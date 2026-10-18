@@ -70,6 +70,21 @@ grep -qF 'https://www.supertext.com' <<< "$page"
 article=$(curl -sf -H "$auth" "$B/api/v1/article?aposLocale=it&aposMode=draft")
 grep -qF 'Realizzato a mano a Berna' <<< "$article"
 grep -qF '<em>scatola di degustazione</em>' <<< "$article"
+
+# Translation files: export the article for French as HTML, translate its title, import it.
+artid=$(curl -sf -H "$auth" "$B/api/v1/article?aposLocale=en&aposMode=draft" | node -pe 'JSON.parse(require("fs").readFileSync(0)).results[0]._id')
+file=$(mktemp)
+headers=$(curl -sf -D - -o "$file" -H "$auth" -H 'Content-Type: application/json' \
+	-d "{\"_id\":\"$artid\",\"format\":\"html\",\"targets\":[\"fr\"]}" "$B/api/v1/supertext-apostrophe-translation/export")
+grep -qi '^content-disposition: attachment; filename="apostrophe-.*-fr.html"' <<< "$headers"
+grep -qF '<meta name="supertext:target-language" content="fr-CH">' "$file"
+sed -i 's/>Handmade in Bern</>Fait main à Berne (fichier)</' "$file"
+imp() { curl -s -H "$auth" -H 'Content-Type: text/plain' --data-binary @"$file" "$B/api/v1/supertext-apostrophe-translation/import$1"; }
+grep -qF '"code":"exists"' <<< "$(imp '')"
+grep -qF '"saved":true' <<< "$(imp '?overwrite=1')"
+curl -sf -H "$auth" "$B/api/v1/article?aposLocale=fr&aposMode=draft" | grep -qF 'Fait main à Berne (fichier)'
+rm -f "$file"
+echo "Translation files OK"
 # The language mapping (Supertext screen): administrators only, codes checked server-side.
 admin=$(curl -sf -H 'Content-Type: application/json' \
 	-d "{\"username\":\"$DEMO_ADMIN_EMAIL\",\"password\":\"$DEMO_ADMIN_PASSWORD\"}" \

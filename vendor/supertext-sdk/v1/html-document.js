@@ -29,7 +29,8 @@ export function build(segments) {
 const START = /<([a-zA-Z][a-zA-Z0-9]*)(?=[\s>/])[^>]*?\sdata-st-id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))[^>]*>/g;
 const ENTITY = /&(#[xX][0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos|nbsp);/g;
 const NAMED = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
-function decodeEntities(text) {
+/** Decodes the entities Supertext writes (numeric, amp, lt, gt, quot, apos, nbsp); others stay as they are. */
+export function decodeEntities(text) {
     return text.replace(ENTITY, (match, entity) => {
         if (entity[0] !== '#')
             return NAMED[entity];
@@ -41,7 +42,7 @@ function decodeEntities(text) {
     });
 }
 /** Plain text back from a translated segment: line breaks from <br>, tags removed, whitespace collapsed. */
-function toPlainText(inner) {
+export function toPlainText(inner) {
     const text = inner
         .replace(/<br\s*\/?>/gi, '\u001e') // keep line breaks through the whitespace collapse
         .replace(/<[^>]*>/g, '')
@@ -58,7 +59,16 @@ const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * flags decide how each is read; their texts are not used.
  */
 export function parse(html, segments) {
-    const out = segments.map(() => null);
+    const found = readSegments(html, (id) => segments[id]?.html ?? null);
+    return segments.map((_, id) => found.get(id) ?? null);
+}
+/**
+ * The texts of the elements carrying data-st-id, read as HTML or plain text as
+ * `kind(id)` says (null: not wanted). First element per id wins. Internal: also
+ * used for translation files, whose ids come from an uploaded file.
+ */
+export function readSegments(html, kind) {
+    const out = new Map();
     const start = new RegExp(START.source, 'g');
     let m;
     while ((m = start.exec(html))) {
@@ -85,10 +95,10 @@ export function parse(html, segments) {
         }
         if (end < 0)
             continue; // no closing tag: ignore, keep scanning after the start tag
-        const segment = segments[id];
-        if (segment && out[id] === null) {
+        const asHtml = Number.isSafeInteger(id) ? kind(id) : null;
+        if (asHtml !== null && !out.has(id)) {
             const inner = html.slice(contentStart, end);
-            out[id] = segment.html ? inner.replace(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, '') : toPlainText(inner);
+            out.set(id, asHtml ? inner.replace(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, '') : toPlainText(inner));
         }
         start.lastIndex = after;
     }

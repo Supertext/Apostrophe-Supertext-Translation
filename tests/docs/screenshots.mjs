@@ -11,7 +11,9 @@
  * shows the live API address instead of the stand-in's (and example.ch as ping address).
  */
 import { chromium } from 'playwright'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const base = (process.env.BASE_URL || 'http://127.0.0.1:3000').replace(/\/$/, '')
 const out = new URL('../../docs/images/', import.meta.url).pathname
@@ -28,6 +30,12 @@ const shot = async (page, name, target, pad = 0) => {
   }
   await page.screenshot({ path: out + name, clip })
   console.log('docs/images/' + name)
+}
+
+// The upper part of an element (side panels are as tall as the window).
+const top = async (page, selector, height) => {
+  const box = await page.locator(selector).last().boundingBox()
+  return { ...box, height: Math.min(box.height, height) }
 }
 
 async function login (user, password) {
@@ -94,6 +102,45 @@ await page.getByText('Deutsch', { exact: false }).first().click()
 await page.waitForTimeout(500)
 await shot(page, 'localize-again.png', modal)
 await page.getByRole('button', { name: 'Cancel' }).first().click()
+
+// "Export for translation" and "Import translation" in the same menu.
+await openLocalize(page, '/swiss-chocolate')
+await page.getByText('Export for translation', { exact: true }).first().click()
+await page.locator('.supertext-files-targets').waitFor({ timeout: 30000 })
+await page.getByLabel('Deutsch').check()
+await page.getByLabel('Français').check()
+await page.waitForTimeout(500)
+await shot(page, 'export-dialog.png', await top(page, modal, 440))
+// The file the dialog downloads (fetched the same way), translated into French for the
+// plain-text segments the stand-in knows; segments with formatting stay untranslated.
+const xliff = await page.evaluate(async () => {
+  const pages = await apos.http.get('/api/v1/@apostrophecms/page', { qs: { all: 1, flat: 1 }, draft: true })
+  const id = pages.results.find((p) => p.slug === '/swiss-chocolate')._id
+  const response = await apos.http.post(apos.modules['supertext-apostrophe-translation'].action + '/export', {
+    body: { _id: id, format: 'xliff', targets: [ 'fr' ] },
+    fullResponse: true
+  })
+  return response.body
+})
+const samples = JSON.parse(readFileSync(new URL('samples.json', import.meta.url), 'utf8')).fr
+const unescape = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+const translated = xliff.replace(/<source>([^<]*)<\/source>/g, (all, text) => {
+  const fr = samples[unescape(text)]
+  return fr ? `${all}<target>${escape(fr)}</target>` : all
+})
+const file = join(tmpdir(), 'apostrophe-swiss-chocolate-fr.xlf')
+writeFileSync(file, translated)
+await page.keyboard.press('Escape')
+await page.waitForTimeout(800)
+await openLocalize(page, '/swiss-chocolate')
+await page.getByText('Import translation', { exact: true }).first().click()
+await page.locator('.supertext-files-file').setInputFiles(file)
+await page.locator('.supertext-files-overwrite').check()
+await page.locator('.supertext-files-import').click()
+await page.locator('.supertext-files-summary').waitFor({ timeout: 60000 })
+await page.waitForTimeout(500)
+await shot(page, 'import-summary.png', await top(page, modal, 460))
 await page.close()
 
 // --- Administrator: locales and the Supertext status screen ---------------------------
