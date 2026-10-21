@@ -8,7 +8,7 @@ The module registers Supertext as a **translation provider** for Apostrophe's ow
 
 ## Requirements
 
-- ApostropheCMS 4.13 or later (tested with 4.33), with MongoDB, PostgreSQL or SQLite.
+- ApostropheCMS 4.13 or later (tested with 4.34), with MongoDB, PostgreSQL or SQLite.
 - Node.js 22.12 or later.
 - At least two locales configured in `@apostrophecms/i18n` (see [Languages](#languages)).
 - A Supertext account and an API key for the AI translation API:

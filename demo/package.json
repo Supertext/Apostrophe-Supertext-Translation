@@ -12,8 +12,8 @@
   "author": "Supertext AG",
   "license": "MIT",
   "dependencies": {
-    "@apostrophecms/vite": "^1.1.2",
-    "apostrophe": "^4.33.0",
+    "@apostrophecms/vite": "^1.2.0",
+    "apostrophe": "^4.34.0",
     "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
     "normalize.css": "^8.0.1",

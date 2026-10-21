@@ -23,6 +23,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ### Changed
 
+- Tested with ApostropheCMS 4.34 (the demo runs 4.34).
 - **Language mapping on the Supertext screen** (admin bar → Supertext → Languages): one combo box per locale with Supertext's languages (*Name (code)*, names in the admin's language) and, where Supertext offers it, the form of address; **Save languages** stores the choice in the database (checked against Supertext's list on the server) and applies it without a restart. The module option `languages` stays as an override for automated setups (those locales are read-only on the screen); existing `languages` options keep working unchanged.
 - **Default target languages** (Supertext SDK 0.4.0): a locale nobody mapped uses the obvious default (`de` → `de-DE`, `en` → `en-US`, `fr` → `fr-FR`, `it` → `it-IT`, `pt` → `pt-PT`, `zh` → `zh-Hans`, `es-ES` → `es`, …) instead of being unsupported; the combo box preselects it. Locales without a default (`en-IE`, `de-LI`, `gsw`, …) show *— choose —* and stay unsupported until a language is chosen. The *unsupported language* message now points to Supertext → Languages.
 - Version reports, the API key check result and the reachability ping now use [Supertext Plugin Health](https://github.com/Supertext/Commando-Center-Supertext-Translation/tree/main/plugin-health) 0.1.0 (bundled in `vendor/supertext-plugin-health`); Supertext SDK updated to 0.3.0. No change for sites: settings and stored state stay as they are.
