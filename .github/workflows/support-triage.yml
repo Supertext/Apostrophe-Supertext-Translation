@@ -43,7 +43,7 @@ jobs:
           gh label create feature-request --repo "$REPO" --color a2eeef --description "Idea for the product owner" --force
           gh label create needs-info --repo "$REPO" --color fbca04 --description "Waiting for the sender" --force
 
-      - uses: anthropics/claude-code-action@f27be6b65a4652f08a2ba3cff79114829b588967 # v1.0.252
+      - uses: anthropics/claude-code-action@e4a6faad497d33dbc7144135c75e41f82f0bf6c0 # v1.0.255
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           branch_prefix: claude/support-
